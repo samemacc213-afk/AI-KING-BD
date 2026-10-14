@@ -5,17 +5,21 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import kotlin.math.abs
 
@@ -23,6 +27,8 @@ class FloatingService : Service() {
 
     private var wm: WindowManager? = null
     private var button: ImageView? = null
+    private var params: WindowManager.LayoutParams? = null
+    private val handler = Handler(Looper.getMainLooper())
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -60,7 +66,7 @@ class FloatingService : Service() {
         val manager = getSystemService(WINDOW_SERVICE) as WindowManager
         wm = manager
         val density = resources.displayMetrics.density
-        val size = (44 * density).toInt()
+        val size = (32 * density).toInt()
         val prefs = Prefs(this)
 
         val lp = WindowManager.LayoutParams(
@@ -75,9 +81,11 @@ class FloatingService : Service() {
             x = prefs.btnX
             y = prefs.btnY
         }
+        params = lp
 
         val iv = ImageView(this).apply {
-            setImageResource(R.drawable.ic_float_button)
+            setImageResource(R.drawable.logo)
+            scaleType = ImageView.ScaleType.FIT_XY
             contentDescription = "Read copied text"
         }
         val slop = ViewConfiguration.get(this).scaledTouchSlop
@@ -129,10 +137,39 @@ class FloatingService : Service() {
         button = iv
     }
 
+    private fun readClip(): String? {
+        val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = cm.primaryClip ?: return null
+        if (clip.itemCount == 0) return null
+        return clip.getItemAt(0).coerceToText(this)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
     private fun readClipboardAloud() {
-        val i = Intent(this, ClipboardActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
-        startActivity(i)
+        val manager = wm ?: return
+        val iv = button ?: return
+        val lp = params ?: return
+
+        // Make the button window focusable for a moment so Android allows clipboard reading
+        lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+        manager.updateViewLayout(iv, lp)
+
+        var tries = 0
+        fun attempt() {
+            tries++
+            val text = readClip()
+            if (text != null || tries >= 6) {
+                lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                try { manager.updateViewLayout(iv, lp) } catch (_: Exception) {}
+                if (text == null) {
+                    Toast.makeText(this, "Nothing copied yet", Toast.LENGTH_SHORT).show()
+                } else {
+                    Speaker.speak(this, text)
+                }
+            } else {
+                handler.postDelayed({ attempt() }, 60)
+            }
+        }
+        handler.postDelayed({ attempt() }, 60)
     }
 
     override fun onDestroy() {
