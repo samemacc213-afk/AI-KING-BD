@@ -18,6 +18,16 @@ object Speaker {
 
     fun speak(context: Context, text: String) {
         val app = context.applicationContext
+        OnlineVoice.speak(app, text) {
+            main.post {
+                toast(app, "Internet voice not available, using phone voice")
+                speakLocal(app, text)
+            }
+        }
+    }
+
+    fun speakLocal(context: Context, text: String) {
+        val app = context.applicationContext
         forceLocal = false
         if (tts == null) {
             pending = text

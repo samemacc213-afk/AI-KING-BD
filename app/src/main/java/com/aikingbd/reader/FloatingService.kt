@@ -66,7 +66,7 @@ class FloatingService : Service() {
         val manager = getSystemService(WINDOW_SERVICE) as WindowManager
         wm = manager
         val density = resources.displayMetrics.density
-        val size = (32 * density).toInt()
+        val size = (30 * density).toInt()
         val prefs = Prefs(this)
 
         val lp = WindowManager.LayoutParams(
@@ -84,7 +84,7 @@ class FloatingService : Service() {
         params = lp
 
         val iv = ImageView(this).apply {
-            setImageResource(R.drawable.logo)
+            setImageResource(R.drawable.ic_float_logo)
             scaleType = ImageView.ScaleType.FIT_XY
             contentDescription = "Read copied text"
         }
@@ -110,8 +110,8 @@ class FloatingService : Service() {
                         val dy = e.rawY - downY
                         if (abs(dx) > slop || abs(dy) > slop) moved = true
                         if (moved) {
-                            lp.x = (startX + dx).toInt()
-                            lp.y = (startY + dy).toInt()
+                            lp.x = (startX + dx).toInt().coerceIn(0, resources.displayMetrics.widthPixels - size)
+                            lp.y = (startY + dy).toInt().coerceIn(0, resources.displayMetrics.heightPixels - size)
                             manager.updateViewLayout(iv, lp)
                         }
                         return true
@@ -121,7 +121,7 @@ class FloatingService : Service() {
                             readClipboardAloud()
                         } else {
                             val screenW = resources.displayMetrics.widthPixels
-                            lp.x = if (lp.x + size / 2 < screenW / 2) 0 else screenW - size
+                            lp.x = lp.x.coerceIn(0, screenW - size)
                             manager.updateViewLayout(iv, lp)
                             prefs.btnX = lp.x
                             prefs.btnY = lp.y
