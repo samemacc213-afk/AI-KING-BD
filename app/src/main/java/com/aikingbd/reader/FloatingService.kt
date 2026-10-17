@@ -8,6 +8,8 @@ import android.app.Service
 import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.BitmapFactory
+import android.graphics.Outline
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
@@ -17,13 +19,20 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewOutlineProvider
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import java.io.File
 import kotlin.math.abs
 
 class FloatingService : Service() {
+
+    companion object {
+        const val ACTION_REFRESH = "com.aikingbd.reader.REFRESH"
+    }
 
     private var wm: WindowManager? = null
     private var button: ImageView? = null
@@ -34,7 +43,11 @@ class FloatingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startAsForeground()
-        if (button == null) showButton()
+        if (button == null) {
+            showButton()
+        } else if (intent?.action == ACTION_REFRESH) {
+            applyImage()
+        }
         return START_STICKY
     }
 
@@ -61,12 +74,30 @@ class FloatingService : Service() {
         }
     }
 
+    private fun applyImage() {
+        val iv = button ?: return
+        val prefs = Prefs(this)
+        val f = File(filesDir, "button_photo.png")
+        if (prefs.hasPhoto && f.exists()) {
+            val bmp = BitmapFactory.decodeFile(f.absolutePath)
+            if (bmp != null) {
+                iv.scaleType = ImageView.ScaleType.CENTER_CROP
+                iv.setImageBitmap(bmp)
+                iv.clipToOutline = true
+                return
+            }
+        }
+        iv.clipToOutline = false
+        iv.scaleType = ImageView.ScaleType.FIT_CENTER
+        iv.setImageResource(R.drawable.ic_emoji_button)
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     private fun showButton() {
         val manager = getSystemService(WINDOW_SERVICE) as WindowManager
         wm = manager
         val density = resources.displayMetrics.density
-        val size = (30 * density).toInt()
+        val size = (36 * density).toInt()
         val prefs = Prefs(this)
 
         val lp = WindowManager.LayoutParams(
@@ -84,10 +115,16 @@ class FloatingService : Service() {
         params = lp
 
         val iv = ImageView(this).apply {
-            setImageResource(R.drawable.ic_float_logo)
-            scaleType = ImageView.ScaleType.FIT_XY
             contentDescription = "Read copied text"
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setOval(0, 0, view.width, view.height)
+                }
+            }
         }
+        button = iv
+        applyImage()
+
         val slop = ViewConfiguration.get(this).scaledTouchSlop
 
         iv.setOnTouchListener(object : View.OnTouchListener {
@@ -110,19 +147,18 @@ class FloatingService : Service() {
                         val dy = e.rawY - downY
                         if (abs(dx) > slop || abs(dy) > slop) moved = true
                         if (moved) {
-                            lp.x = (startX + dx).toInt().coerceIn(0, resources.displayMetrics.widthPixels - size)
-                            lp.y = (startY + dy).toInt().coerceIn(0, resources.displayMetrics.heightPixels - size)
+                            lp.x = (startX + dx).toInt()
+                                .coerceIn(0, resources.displayMetrics.widthPixels - size)
+                            lp.y = (startY + dy).toInt()
+                                .coerceIn(0, resources.displayMetrics.heightPixels - size)
                             manager.updateViewLayout(iv, lp)
                         }
                         return true
                     }
                     MotionEvent.ACTION_UP -> {
                         if (!moved) {
-                            readClipboardAloud()
+                            onTap()
                         } else {
-                            val screenW = resources.displayMetrics.widthPixels
-                            lp.x = lp.x.coerceIn(0, screenW - size)
-                            manager.updateViewLayout(iv, lp)
                             prefs.btnX = lp.x
                             prefs.btnY = lp.y
                         }
@@ -134,7 +170,14 @@ class FloatingService : Service() {
         })
 
         manager.addView(iv, lp)
-        button = iv
+    }
+
+    private fun onTap() {
+        if (Speaker.isSpeaking()) {
+            Speaker.stop()
+        } else {
+            readClipboardAloud()
+        }
     }
 
     private fun readClip(): String? {
@@ -149,27 +192,35 @@ class FloatingService : Service() {
         val iv = button ?: return
         val lp = params ?: return
 
-        // Make the button window focusable for a moment so Android allows clipboard reading
+        var finished = false
+        lateinit var listener: ViewTreeObserver.OnWindowFocusChangeListener
+
+        fun finish(text: String?) {
+            if (finished) return
+            finished = true
+            try { iv.viewTreeObserver.removeOnWindowFocusChangeListener(listener) } catch (_: Exception) {}
+            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            try { manager.updateViewLayout(iv, lp) } catch (_: Exception) {}
+            if (text == null) {
+                Toast.makeText(this, "Nothing copied yet", Toast.LENGTH_SHORT).show()
+            } else {
+                Speaker.speak(this, text)
+            }
+        }
+
+        listener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+            if (hasFocus) {
+                val t = readClip()
+                if (t != null) finish(t)
+            }
+        }
+        iv.viewTreeObserver.addOnWindowFocusChangeListener(listener)
+
+        // Briefly make the button window focusable so Android allows clipboard reading
         lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
         manager.updateViewLayout(iv, lp)
 
-        var tries = 0
-        fun attempt() {
-            tries++
-            val text = readClip()
-            if (text != null || tries >= 6) {
-                lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                try { manager.updateViewLayout(iv, lp) } catch (_: Exception) {}
-                if (text == null) {
-                    Toast.makeText(this, "Nothing copied yet", Toast.LENGTH_SHORT).show()
-                } else {
-                    Speaker.speak(this, text)
-                }
-            } else {
-                handler.postDelayed({ attempt() }, 60)
-            }
-        }
-        handler.postDelayed({ attempt() }, 60)
+        handler.postDelayed({ finish(readClip()) }, 700)
     }
 
     override fun onDestroy() {

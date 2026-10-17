@@ -15,9 +15,19 @@ object OnlineVoice {
     private val executor = Executors.newSingleThreadExecutor()
     @Volatile private var generation = 0
     @Volatile private var player: MediaPlayer? = null
+    @Volatile private var active = false
+
+    fun isActive(): Boolean = active
+
+    fun stop() {
+        generation++
+        active = false
+        stopPlayer()
+    }
 
     fun speak(ctx: Context, text: String, onFail: () -> Unit) {
         val gen = ++generation
+        active = true
         stopPlayer()
         executor.execute { playAll(ctx.applicationContext, text, gen, onFail) }
     }
@@ -32,6 +42,14 @@ object OnlineVoice {
     }
 
     private fun playAll(ctx: Context, text: String, gen: Int, onFail: () -> Unit) {
+        try {
+            playChunks(ctx, text, gen, onFail)
+        } finally {
+            if (gen == generation) active = false
+        }
+    }
+
+    private fun playChunks(ctx: Context, text: String, gen: Int, onFail: () -> Unit) {
         val lang = if (text.any { it in '\u0980'..'\u09FF' }) "bn" else "en"
         val chunks = split(text)
         if (chunks.isEmpty()) return

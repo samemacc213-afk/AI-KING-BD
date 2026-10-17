@@ -16,6 +16,16 @@ object Speaker {
     private var forceLocal = false
     private val main = Handler(Looper.getMainLooper())
 
+    fun isSpeaking(): Boolean {
+        return OnlineVoice.isActive() || (ready && tts?.isSpeaking == true)
+    }
+
+    fun stop() {
+        OnlineVoice.stop()
+        pending = null
+        try { tts?.stop() } catch (_: Exception) {}
+    }
+
     fun speak(context: Context, text: String) {
         val app = context.applicationContext
         OnlineVoice.speak(app, text) {
