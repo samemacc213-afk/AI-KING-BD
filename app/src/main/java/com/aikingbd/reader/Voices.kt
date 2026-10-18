@@ -17,4 +17,20 @@ object Voices {
     )
 
     fun find(id: String): VoiceOption = list.firstOrNull { it.id == id } ?: list[0]
+
+    // Voices for the voice-message maker (Sarvam AI, Bengali, female)
+    val msgList = listOf(
+        VoiceOption("priya", "Voice 1 • Priya"),
+        VoiceOption("ishita", "Voice 2 • Ishita"),
+        VoiceOption("roopa", "Voice 3 • Roopa"),
+        VoiceOption("pooja", "Voice 4 • Pooja"),
+        VoiceOption("simran", "Voice 5 • Simran"),
+        VoiceOption("suhani", "Voice 6 • Suhani"),
+        VoiceOption("shreya", "Voice 7 • Shreya"),
+        VoiceOption("rupali", "Voice 8 • Rupali"),
+        VoiceOption("neha", "Voice 9 • Neha"),
+        VoiceOption("ritu", "Voice 10 • Ritu")
+    )
+
+    fun findMsg(id: String): VoiceOption = msgList.firstOrNull { it.id == id } ?: msgList[0]
 }

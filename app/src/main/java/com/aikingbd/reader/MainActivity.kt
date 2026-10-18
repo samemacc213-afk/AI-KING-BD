@@ -111,6 +111,10 @@ class MainActivity : AppCompatActivity() {
 
         setupVoiceMessage()
 
+        val sk = findViewById<EditText>(R.id.etSarvamKey)
+        sk.setText(prefs.sarvamKey)
+        sk.doAfterTextChanged { prefs.sarvamKey = it?.toString()?.trim() ?: "" }
+
         setupVoicePickers()
     }
 
@@ -178,9 +182,9 @@ class MainActivity : AppCompatActivity() {
         val floatBtn = findViewById<TextView>(R.id.btnFloatVoice)
         val msgBtn = findViewById<TextView>(R.id.btnMsgVoice)
         if (prefs.voiceId.isEmpty()) prefs.voiceId = Voices.list[0].id
-        if (prefs.msgVoiceId.isEmpty()) prefs.msgVoiceId = Voices.list[0].id
+        if (prefs.msgVoiceId.isEmpty() || Voices.msgList.none { it.id == prefs.msgVoiceId }) prefs.msgVoiceId = Voices.msgList[0].id
         floatBtn.text = Voices.find(prefs.voiceId).label + "  ▼"
-        msgBtn.text = Voices.find(prefs.msgVoiceId).label + "  ▼"
+        msgBtn.text = Voices.findMsg(prefs.msgVoiceId).label + "  ▼"
 
         floatBtn.setOnClickListener {
             pickVoice("Floating button voice", prefs.voiceId) { id ->
@@ -194,21 +198,21 @@ class MainActivity : AppCompatActivity() {
             }
         }
         msgBtn.setOnClickListener {
-            pickVoice("Voice message voice", prefs.msgVoiceId) { id ->
+            pickVoice("Voice message voice", prefs.msgVoiceId, Voices.msgList) { id ->
                 prefs.msgVoiceId = id
-                msgBtn.text = Voices.find(id).label + "  ▼"
+                msgBtn.text = Voices.findMsg(id).label + "  ▼"
             }
         }
         findViewById<TextView>(R.id.btnPlayVoice).setOnClickListener { playLastVoice() }
     }
 
-    private fun pickVoice(title: String, current: String, onPicked: (String) -> Unit) {
-        val labels = Voices.list.map { it.label }.toTypedArray()
-        val checked = Voices.list.indexOfFirst { it.id == current }.coerceAtLeast(0)
+    private fun pickVoice(title: String, current: String, opts: List<VoiceOption> = Voices.list, onPicked: (String) -> Unit) {
+        val labels = opts.map { it.label }.toTypedArray()
+        val checked = opts.indexOfFirst { it.id == current }.coerceAtLeast(0)
         AlertDialog.Builder(this)
             .setTitle(title)
             .setSingleChoiceItems(labels, checked) { dialog, which ->
-                onPicked(Voices.list[which].id)
+                onPicked(opts[which].id)
                 dialog.dismiss()
             }
             .setNegativeButton("Cancel", null)
@@ -277,7 +281,7 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     lastVoice = result
                     findViewById<TextView>(R.id.btnPlayVoice).visibility = View.VISIBLE
-                    status.text = "Voice ready. Tap an app to send:"
+                    status.text = if (result.note.isNotEmpty()) "Backup voice used - " + result.note else "Voice ready. Tap an app to send:"
                     showShareRow(row, result)
                 }
             }
