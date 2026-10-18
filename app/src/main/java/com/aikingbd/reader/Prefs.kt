@@ -33,6 +33,10 @@ class Prefs(ctx: Context) {
         get() = sp.getString("voiceId", "") ?: ""
         set(v) = sp.edit().putString("voiceId", v).apply()
 
+    var msgVoiceId: String
+        get() = sp.getString("msgVoiceId", "") ?: ""
+        set(v) = sp.edit().putString("msgVoiceId", v).apply()
+
     var apiKey: String
         get() = sp.getString("apiKey", "") ?: ""
         set(v) = sp.edit().putString("apiKey", v).apply()

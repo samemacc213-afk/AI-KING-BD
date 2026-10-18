@@ -18,6 +18,8 @@ import android.widget.RadioButton
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import android.media.MediaPlayer
+import androidx.appcompat.app.AlertDialog
 import android.view.View
 import android.widget.ImageView
 import androidx.core.content.FileProvider
@@ -52,7 +54,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        MobileAds.initialize(this) { runOnUiThread { AppOpenManager.showOnLaunch(this) } }
+        
         prefs = Prefs(this)
 
         switchFloat = findViewById(R.id.switchFloat)
@@ -109,7 +111,12 @@ class MainActivity : AppCompatActivity() {
 
         setupVoiceMessage()
 
-        buildVoiceList()
+        setupVoicePickers()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AppOpenManager.showIfReady(this)
     }
 
     override fun onResume() {
@@ -165,54 +172,81 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun buildVoiceList() {
-        val box = findViewById<LinearLayout>(R.id.voiceList)
-        val gold = ContextCompat.getColor(this, R.color.gold)
-        val navy = ContextCompat.getColor(this, R.color.navy_text)
-        val dp = resources.displayMetrics.density
-        if (prefs.voiceId.isEmpty()) prefs.voiceId = Voices.list[0].id
+    private var voicePlayer: MediaPlayer? = null
 
-        for (v in Voices.list) {
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, (4 * dp).toInt(), 0, (4 * dp).toInt())
-            }
-            val rb = RadioButton(this).apply {
-                isChecked = (v.id == prefs.voiceId)
-                buttonTintList = ColorStateList.valueOf(gold)
-                setOnClickListener { selectVoice(v.id) }
-            }
-            val label = TextView(this).apply {
-                text = v.label
-                setTextColor(navy)
-                textSize = 15f
-                typeface = Typeface.SERIF
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                setOnClickListener { selectVoice(v.id) }
-            }
-            val play = TextView(this).apply {
-                text = "▶ PLAY"
-                setTextColor(navy)
-                textSize = 13f
-                typeface = Typeface.SERIF
-                gravity = Gravity.CENTER
-                setBackgroundResource(R.drawable.bg_gold_button)
-                setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
-                setOnClickListener {
-                    selectVoice(v.id)
-                    if (prefs.apiKey.isBlank()) {
-                        Toast.makeText(this@MainActivity, "Add your free Gemini key below to hear this voice", Toast.LENGTH_LONG).show()
-                    }
-                    Speaker.speak(this@MainActivity, SAMPLE)
+    private fun setupVoicePickers() {
+        val floatBtn = findViewById<TextView>(R.id.btnFloatVoice)
+        val msgBtn = findViewById<TextView>(R.id.btnMsgVoice)
+        if (prefs.voiceId.isEmpty()) prefs.voiceId = Voices.list[0].id
+        if (prefs.msgVoiceId.isEmpty()) prefs.msgVoiceId = Voices.list[0].id
+        floatBtn.text = Voices.find(prefs.voiceId).label + "  ▼"
+        msgBtn.text = Voices.find(prefs.msgVoiceId).label + "  ▼"
+
+        floatBtn.setOnClickListener {
+            pickVoice("Floating button voice", prefs.voiceId) { id ->
+                prefs.voiceId = id
+                floatBtn.text = Voices.find(id).label + "  ▼"
+                if (prefs.apiKey.isBlank()) {
+                    Toast.makeText(this, "Add your free Gemini key to hear this voice", Toast.LENGTH_LONG).show()
+                } else {
+                    Speaker.speak(this, SAMPLE)
                 }
             }
-            row.addView(rb)
-            row.addView(label)
-            row.addView(play)
-            box.addView(row)
-            radios[v.id] = rb
         }
+        msgBtn.setOnClickListener {
+            pickVoice("Voice message voice", prefs.msgVoiceId) { id ->
+                prefs.msgVoiceId = id
+                msgBtn.text = Voices.find(id).label + "  ▼"
+            }
+        }
+        findViewById<TextView>(R.id.btnPlayVoice).setOnClickListener { playLastVoice() }
+    }
+
+    private fun pickVoice(title: String, current: String, onPicked: (String) -> Unit) {
+        val labels = Voices.list.map { it.label }.toTypedArray()
+        val checked = Voices.list.indexOfFirst { it.id == current }.coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                onPicked(Voices.list[which].id)
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun playLastVoice() {
+        val v = lastVoice ?: return
+        val btn = findViewById<TextView>(R.id.btnPlayVoice)
+        val playing = voicePlayer
+        if (playing != null) {
+            try { playing.stop() } catch (_: Exception) {}
+            try { playing.release() } catch (_: Exception) {}
+            voicePlayer = null
+            btn.text = "▶ PLAY VOICE"
+            return
+        }
+        try {
+            val mp = MediaPlayer()
+            mp.setDataSource(v.file.absolutePath)
+            mp.setOnCompletionListener {
+                try { it.release() } catch (_: Exception) {}
+                voicePlayer = null
+                btn.text = "▶ PLAY VOICE"
+            }
+            mp.prepare()
+            mp.start()
+            voicePlayer = mp
+            btn.text = "■ STOP"
+        } catch (e: Exception) {
+            Toast.makeText(this, "Could not play this voice", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onDestroy() {
+        try { voicePlayer?.release() } catch (_: Exception) {}
+        voicePlayer = null
+        super.onDestroy()
     }
 
     private var lastVoice: VoiceResult? = null
@@ -234,6 +268,7 @@ class MainActivity : AppCompatActivity() {
             row.visibility = View.GONE
             status.visibility = View.VISIBLE
             status.text = "Making voice, please wait..."
+            findViewById<TextView>(R.id.btnPlayVoice).visibility = View.GONE
             VoiceMaker.make(this, text) { result ->
                 btn.isEnabled = true
                 btn.alpha = 1f
@@ -241,6 +276,7 @@ class MainActivity : AppCompatActivity() {
                     status.text = "Could not make voice. Check internet and try again."
                 } else {
                     lastVoice = result
+                    findViewById<TextView>(R.id.btnPlayVoice).visibility = View.VISIBLE
                     status.text = "Voice ready. Tap an app to send:"
                     showShareRow(row, result)
                 }

@@ -132,13 +132,13 @@ object OnlineVoice {
         }
     }
 
-    internal fun gemini(ctx: Context, text: String, voice: String, key: String): Pair<File?, Int> {
+    internal fun gemini(ctx: Context, text: String, voice: String, key: String, style: String = ""): Pair<File?, Int> {
         var lastCode = 0
         for (model in GEMINI_MODELS) {
             try {
                 val body = JSONObject()
                     .put("contents", JSONArray().put(
-                        JSONObject().put("parts", JSONArray().put(JSONObject().put("text", text)))
+                        JSONObject().put("parts", JSONArray().put(JSONObject().put("text", if (style.isEmpty()) text else "$style: $text")))
                     ))
                     .put("generationConfig", JSONObject()
                         .put("responseModalities", JSONArray().put("AUDIO"))

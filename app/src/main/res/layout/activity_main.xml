@@ -511,18 +511,27 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Pick a voice • Tap Play to preview"
+                        android:text="Floating button voice • Tap to change"
                         android:textColor="@color/gold_dark"
                         android:textSize="12sp" />
                 </LinearLayout>
             </LinearLayout>
 
-            <LinearLayout
-                android:id="@+id/voiceList"
+            <TextView
+                android:id="@+id/btnFloatVoice"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="vertical" />
+                android:layout_height="48dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_input"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="serif"
+                android:gravity="center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:text="Voice 1 • Kore  ▼"
+                android:textColor="@color/navy_text"
+                android:textSize="16sp" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -598,6 +607,22 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <TextView
+                android:id="@+id/btnMsgVoice"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_input"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="serif"
+                android:gravity="center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:text="Voice 1 • Kore  ▼"
+                android:textColor="@color/navy_text"
+                android:textSize="16sp" />
+
             <EditText
                 android:id="@+id/etMessage"
                 android:layout_width="match_parent"
@@ -626,6 +651,21 @@
                 android:text="CREATE VOICE"
                 android:textColor="@color/navy_text"
                 android:textSize="17sp" />
+
+            <TextView
+                android:id="@+id/btnPlayVoice"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_input"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="serif"
+                android:gravity="center"
+                android:text="▶ PLAY VOICE"
+                android:textColor="@color/navy_text"
+                android:textSize="16sp"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/tvVoiceStatus"

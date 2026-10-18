@@ -14,6 +14,7 @@ object VoiceMaker {
     private val executor = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private const val MAX_CHARS = 1500
+    private const val STYLE = "Say this in the warm, soft, natural voice of a 19-year-old young woman speaking Bengali"
 
     fun make(ctx: Context, text: String, onDone: (VoiceResult?) -> Unit) {
         val app = ctx.applicationContext
@@ -30,7 +31,7 @@ object VoiceMaker {
     private fun build(ctx: Context, text: String): VoiceResult? {
         val prefs = Prefs(ctx)
         val key = prefs.apiKey.trim()
-        val voice = Voices.find(prefs.voiceId).id
+        val voice = Voices.find(prefs.msgVoiceId).id
         val lang = if (text.any { it in '\u0980'..'\u09FF' }) "bn" else "en"
         val dir = File(ctx.cacheDir, "voices").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
@@ -41,7 +42,7 @@ object VoiceMaker {
             var rate = 24000
             var ok = true
             for (chunk in OnlineVoice.split(text, 700)) {
-                val (f, code) = OnlineVoice.gemini(ctx, chunk, voice, key)
+                val (f, code) = OnlineVoice.gemini(ctx, chunk, voice, key, STYLE)
                 if (f == null) {
                     ok = false
                     toast(ctx, OnlineVoice.reason(code))
