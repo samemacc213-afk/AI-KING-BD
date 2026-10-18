@@ -18,6 +18,9 @@ import android.widget.RadioButton
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import android.view.View
+import android.widget.ImageView
+import androidx.core.content.FileProvider
 import com.google.android.gms.ads.MobileAds
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -103,6 +106,8 @@ class MainActivity : AppCompatActivity() {
         val et = findViewById<EditText>(R.id.etApiKey)
         et.setText(prefs.apiKey)
         et.doAfterTextChanged { prefs.apiKey = it?.toString()?.trim() ?: "" }
+
+        setupVoiceMessage()
 
         buildVoiceList()
     }
@@ -207,6 +212,93 @@ class MainActivity : AppCompatActivity() {
             row.addView(play)
             box.addView(row)
             radios[v.id] = rb
+        }
+    }
+
+    private var lastVoice: VoiceResult? = null
+
+    private fun setupVoiceMessage() {
+        val msg = findViewById<EditText>(R.id.etMessage)
+        val btn = findViewById<TextView>(R.id.btnCreateVoice)
+        val status = findViewById<TextView>(R.id.tvVoiceStatus)
+        val row = findViewById<LinearLayout>(R.id.shareRow)
+
+        btn.setOnClickListener {
+            val text = msg.text.toString().trim()
+            if (text.isEmpty()) {
+                Toast.makeText(this, "Type a message first", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            btn.isEnabled = false
+            btn.alpha = 0.5f
+            row.visibility = View.GONE
+            status.visibility = View.VISIBLE
+            status.text = "Making voice, please wait..."
+            VoiceMaker.make(this, text) { result ->
+                btn.isEnabled = true
+                btn.alpha = 1f
+                if (result == null) {
+                    status.text = "Could not make voice. Check internet and try again."
+                } else {
+                    lastVoice = result
+                    status.text = "Voice ready. Tap an app to send:"
+                    showShareRow(row, result)
+                }
+            }
+        }
+    }
+
+    private fun appIcon(pkg: String) = try {
+        packageManager.getApplicationIcon(pkg)
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun showShareRow(row: LinearLayout, result: VoiceResult) {
+        row.removeAllViews()
+        row.visibility = View.VISIBLE
+        val dp = resources.displayMetrics.density
+        val size = (52 * dp).toInt()
+        val gap = (14 * dp).toInt()
+
+        val apps = listOf("com.whatsapp", "com.imo.android.imoim", "com.facebook.orca")
+        for (pkg in apps) {
+            val icon = appIcon(pkg) ?: continue
+            val iv = ImageView(this)
+            iv.setImageDrawable(icon)
+            iv.layoutParams = LinearLayout.LayoutParams(size, size).apply { marginEnd = gap }
+            iv.setOnClickListener { sendVoice(result, pkg) }
+            row.addView(iv)
+        }
+
+        val more = TextView(this)
+        more.text = "MORE"
+        more.setTextColor(ContextCompat.getColor(this, R.color.navy_text))
+        more.textSize = 14f
+        more.typeface = Typeface.SERIF
+        more.gravity = Gravity.CENTER
+        more.setBackgroundResource(R.drawable.bg_gold_button)
+        more.layoutParams = LinearLayout.LayoutParams((84 * dp).toInt(), (44 * dp).toInt())
+        more.setOnClickListener { sendVoice(result, null) }
+        row.addView(more)
+    }
+
+    private fun sendVoice(result: VoiceResult, pkg: String?) {
+        try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", result.file)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = result.mime
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                if (pkg != null) setPackage(pkg)
+            }
+            if (pkg == null) {
+                startActivity(Intent.createChooser(intent, "Send voice"))
+            } else {
+                startActivity(intent)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Could not open that app", Toast.LENGTH_SHORT).show()
         }
     }
 

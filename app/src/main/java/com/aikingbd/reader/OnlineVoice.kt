@@ -63,7 +63,7 @@ object OnlineVoice {
         main.post { Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show() }
     }
 
-    private fun reason(code: Int): String = when (code) {
+    internal fun reason(code: Int): String = when (code) {
         429 -> "Gemini voice limit reached, using backup voice"
         400, 401, 403 -> "Gemini key problem, using backup voice"
         -1 -> "No internet for Gemini voice, using backup voice"
@@ -132,7 +132,7 @@ object OnlineVoice {
         }
     }
 
-    private fun gemini(ctx: Context, text: String, voice: String, key: String): Pair<File?, Int> {
+    internal fun gemini(ctx: Context, text: String, voice: String, key: String): Pair<File?, Int> {
         var lastCode = 0
         for (model in GEMINI_MODELS) {
             try {
@@ -181,7 +181,7 @@ object OnlineVoice {
         return Pair(null, lastCode)
     }
 
-    private fun pcmToWav(pcm: ByteArray, rate: Int): ByteArray {
+    internal fun pcmToWav(pcm: ByteArray, rate: Int): ByteArray {
         val out = ByteArrayOutputStream()
         fun w32(v: Int) {
             out.write(v and 0xff); out.write((v shr 8) and 0xff)
@@ -209,7 +209,7 @@ object OnlineVoice {
         return f
     }
 
-    private fun downloadBytes(text: String, lang: String): ByteArray? {
+    internal fun downloadBytes(text: String, lang: String): ByteArray? {
         return try {
             val q = URLEncoder.encode(text, "UTF-8")
             val url = URL(
@@ -231,7 +231,7 @@ object OnlineVoice {
         }
     }
 
-    private fun split(text: String, max: Int): List<String> {
+    internal fun split(text: String, max: Int): List<String> {
         val clean = text.replace("\\s+".toRegex(), " ").trim()
         val pieces = mutableListOf<String>()
         for (p in clean.split(Regex("(?<=[।.!?])\\s*"))) {
