@@ -37,9 +37,25 @@ class Prefs(ctx: Context) {
         get() = sp.getString("msgVoiceId", "") ?: ""
         set(v) = sp.edit().putString("msgVoiceId", v).apply()
 
+    var elevenKey: String
+        get() = sp.getString("elevenKey", "") ?: ""
+        set(v) = sp.edit().putString("elevenKey", v).apply()
+
+    var elVoiceId: String
+        get() = sp.getString("elVoiceId", "") ?: ""
+        set(v) = sp.edit().putString("elVoiceId", v).apply()
+
+    var elVoiceName: String
+        get() = sp.getString("elVoiceName", "") ?: ""
+        set(v) = sp.edit().putString("elVoiceName", v).apply()
+
     var sarvamKey: String
         get() = sp.getString("sarvamKey", "") ?: ""
         set(v) = sp.edit().putString("sarvamKey", v).apply()
+
+    var flashOn: Boolean
+        get() = sp.getBoolean("flashOn", false)
+        set(v) = sp.edit().putBoolean("flashOn", v).apply()
 
     var apiKey: String
         get() = sp.getString("apiKey", "") ?: ""

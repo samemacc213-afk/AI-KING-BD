@@ -24,23 +24,39 @@ object VoiceMaker {
 
     private fun build(ctx: Context, text: String): VoiceResult? {
         val prefs = Prefs(ctx)
-        val key = prefs.sarvamKey.trim()
-        val speaker = Voices.findMsg(prefs.msgVoiceId).id
         val dir = File(ctx.cacheDir, "voices").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
         val stamp = System.currentTimeMillis()
         var note = ""
 
-        if (key.isNotEmpty()) {
-            val wav = SarvamVoice.synth(text, speaker, key)
+        val elKey = prefs.elevenKey.trim()
+        if (elKey.isNotEmpty()) {
+            if (prefs.elVoiceId.isNotEmpty()) {
+                val mp3 = ElevenVoice.synth(text, prefs.elVoiceId, elKey)
+                if (mp3 != null && mp3.size > 100) {
+                    val out = File(dir, "AI_KING_voice_$stamp.mp3")
+                    out.writeBytes(mp3)
+                    return VoiceResult(out, "audio/mpeg")
+                }
+                note = ElevenVoice.lastError.ifEmpty { "ElevenLabs voice failed" }
+            } else {
+                note = "ElevenLabs voice not chosen"
+            }
+        }
+
+        val sKey = prefs.sarvamKey.trim()
+        if (sKey.isNotEmpty()) {
+            val speaker = Voices.findMsg(prefs.msgVoiceId).id
+            val wav = SarvamVoice.synth(text, speaker, sKey)
             if (wav != null && wav.size > 100) {
                 val out = File(dir, "AI_KING_voice_$stamp.wav")
                 out.writeBytes(wav)
-                return VoiceResult(out, "audio/wav")
+                return VoiceResult(out, "audio/wav", note)
             }
-            note = SarvamVoice.lastError.ifEmpty { "Sarvam voice failed" }
-        } else {
-            note = "No Sarvam key added"
+            val why = SarvamVoice.lastError.ifEmpty { "Sarvam failed" }
+            note = if (note.isEmpty()) why else "$note | $why"
+        } else if (note.isEmpty()) {
+            note = "No voice key added"
         }
 
         val lang = if (text.any { it in '\u0980'..'\u09FF' }) "bn" else "en"

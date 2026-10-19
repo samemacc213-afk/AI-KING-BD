@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.net.Uri
+import android.graphics.Paint
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -56,6 +57,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         
         prefs = Prefs(this)
+        setupFlashCard()
 
         switchFloat = findViewById(R.id.switchFloat)
         tvStatus = findViewById(R.id.tvStatus)
@@ -115,6 +117,9 @@ class MainActivity : AppCompatActivity() {
         sk.setText(prefs.sarvamKey)
         sk.doAfterTextChanged { prefs.sarvamKey = it?.toString()?.trim() ?: "" }
 
+        setupLinks()
+        setupEleven()
+
         setupVoicePickers()
     }
 
@@ -125,6 +130,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        refreshFlashStatus()
         val granted = Settings.canDrawOverlays(this)
         tvPermission.text = if (granted) "Overlay Permission • Granted" else "Overlay Permission"
         val on = prefs.enabled && granted
@@ -345,6 +351,115 @@ class MainActivity : AppCompatActivity() {
     private fun selectVoice(id: String) {
         prefs.voiceId = id
         radios.forEach { (k, rb) -> rb.isChecked = (k == id) }
+    }
+
+    private fun setupLinks() {
+        for ((linkId, url) in listOf(
+            R.id.btnGeminiLink to "https://aistudio.google.com/apikey",
+            R.id.btnSarvamLink to "https://indus.sarvam.ai",
+            R.id.btnElLink to "https://elevenlabs.io"
+        )) {
+            val tv = findViewById<TextView>(linkId)
+            tv.paintFlags = tv.paintFlags or Paint.UNDERLINE_TEXT_FLAG
+            tv.setOnClickListener {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                } catch (e: Exception) {
+                    Toast.makeText(this, "No browser found", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun setupEleven() {
+        val keyBox = findViewById<EditText>(R.id.etElevenKey)
+        val voiceBtn = findViewById<TextView>(R.id.btnElVoice)
+        keyBox.setText(prefs.elevenKey)
+        keyBox.doAfterTextChanged { prefs.elevenKey = it?.toString()?.trim() ?: "" }
+
+        fun label() {
+            voiceBtn.text = if (prefs.elVoiceName.isEmpty()) "ElevenLabs voice: tap to choose  ▼"
+            else "ElevenLabs: " + prefs.elVoiceName + "  ▼"
+        }
+        label()
+
+        voiceBtn.setOnClickListener {
+            val key = prefs.elevenKey
+            if (key.isBlank()) {
+                Toast.makeText(this, "Paste your ElevenLabs key first", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            voiceBtn.text = "Loading voices..."
+            Thread {
+                val all = ElevenVoice.listVoices(key)
+                runOnUiThread {
+                    label()
+                    if (all == null) {
+                        Toast.makeText(this, ElevenVoice.lastError.ifEmpty { "Could not load voices" }, Toast.LENGTH_LONG).show()
+                        return@runOnUiThread
+                    }
+                    val female = all.filter { it.female }
+                    val list = if (female.isNotEmpty()) female else all
+                    if (list.isEmpty()) {
+                        Toast.makeText(this, "No voices found", Toast.LENGTH_SHORT).show()
+                        return@runOnUiThread
+                    }
+                    val names = list.map { it.name }.toTypedArray()
+                    val checked = list.indexOfFirst { it.id == prefs.elVoiceId }.coerceAtLeast(0)
+                    AlertDialog.Builder(this)
+                        .setTitle("ElevenLabs voices")
+                        .setSingleChoiceItems(names, checked) { d, which ->
+                            prefs.elVoiceId = list[which].id
+                            prefs.elVoiceName = list[which].name
+                            label()
+                            d.dismiss()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
+            }.start()
+        }
+    }
+
+    private fun flashAccessGranted(): Boolean =
+        androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
+
+    private fun openFlashAccess() {
+        try {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        } catch (e: Exception) {
+            Toast.makeText(this, "Could not open settings", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun refreshFlashStatus() {
+        val tv = findViewById<TextView>(R.id.tvFlashStatus)
+        tv.text = if (flashAccessGranted()) "Notification access: allowed" else "Notification access: not allowed"
+    }
+
+    private fun setupFlashCard() {
+        val sw = findViewById<SwitchCompat>(R.id.switchFlash)
+        sw.isChecked = prefs.flashOn
+        sw.setOnCheckedChangeListener { _, on ->
+            prefs.flashOn = on
+            if (on) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
+                    != PackageManager.PERMISSION_GRANTED
+                ) {
+                    ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_PHONE_STATE), 21)
+                }
+                if (!flashAccessGranted()) {
+                    Toast.makeText(this, "Turn on AI KING BD in the list", Toast.LENGTH_LONG).show()
+                    openFlashAccess()
+                }
+            } else {
+                Flash.stop()
+            }
+            refreshFlashStatus()
+        }
+        findViewById<TextView>(R.id.btnFlashAccess).setOnClickListener { openFlashAccess() }
+        findViewById<TextView>(R.id.btnFlashTest).setOnClickListener { Flash.blink(this, 5) }
+        refreshFlashStatus()
     }
 
     private fun setupSlider(seekId: Int, labelId: Int, value: Float, onChange: (Float) -> Unit) {

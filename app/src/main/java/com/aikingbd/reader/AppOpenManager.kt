@@ -22,6 +22,8 @@ object AppOpenManager {
     private fun fresh(): Boolean =
         ad != null && System.currentTimeMillis() - loadedAt < MAX_AGE_MS
 
+    fun isReady(): Boolean = fresh()
+
     fun preload(ctx: Context) {
         if (loading || fresh()) return
         loading = true
@@ -47,16 +49,21 @@ object AppOpenManager {
         )
     }
 
-    fun showIfReady(activity: Activity) {
-        if (showing) return
+    fun showIfReady(activity: Activity, onDone: (() -> Unit)? = null): Boolean {
         val now = System.currentTimeMillis()
-        if (lastShownAt != 0L && now - lastShownAt < COOLDOWN_MS) return
-
+        if (showing || (lastShownAt != 0L && now - lastShownAt < COOLDOWN_MS)) {
+            onDone?.invoke()
+            return false
+        }
         val a = ad
         if (a == null || !fresh()) {
-            waiting = activity
-            preload(activity)
-            return
+            if (onDone == null) {
+                waiting = activity
+                preload(activity)
+            } else {
+                onDone.invoke()
+            }
+            return false
         }
 
         ad = null
@@ -69,13 +76,16 @@ object AppOpenManager {
             override fun onAdDismissedFullScreenContent() {
                 showing = false
                 preload(activity)
+                onDone?.invoke()
             }
 
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
                 showing = false
                 preload(activity)
+                onDone?.invoke()
             }
         }
         a.show(activity)
+        return true
     }
 }
