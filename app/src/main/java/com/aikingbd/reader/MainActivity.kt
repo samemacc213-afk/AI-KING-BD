@@ -57,6 +57,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         
         prefs = Prefs(this)
+        setupAdsAndQuota()
         setupFlashCard()
 
         switchFloat = findViewById(R.id.switchFloat)
@@ -273,6 +274,10 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "Type a message first", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
+            if (!canMakeVoice()) {
+                askForMoreVoices()
+                return@setOnClickListener
+            }
             btn.isEnabled = false
             btn.alpha = 0.5f
             row.visibility = View.GONE
@@ -286,6 +291,7 @@ class MainActivity : AppCompatActivity() {
                     status.text = "Could not make voice. Check internet and try again."
                 } else {
                     lastVoice = result
+                    onVoiceCreated()
                     findViewById<TextView>(R.id.btnPlayVoice).visibility = View.VISIBLE
                     status.text = if (result.note.isNotEmpty()) "Backup voice used - " + result.note else "Voice ready. Tap an app to send:"
                     showShareRow(row, result)
@@ -460,6 +466,71 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.btnFlashAccess).setOnClickListener { openFlashAccess() }
         findViewById<TextView>(R.id.btnFlashTest).setOnClickListener { Flash.blink(this, 5) }
         refreshFlashStatus()
+    }
+
+    private fun setupAdsAndQuota() {
+        val content = findViewById<android.view.ViewGroup>(android.R.id.content)
+        val scroll = content.getChildAt(0)
+        content.removeView(scroll)
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setBackgroundColor(ContextCompat.getColor(this, R.color.navy))
+        box.addView(
+            scroll,
+            LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        )
+        val adView = com.google.android.gms.ads.AdView(this)
+        adView.setAdSize(com.google.android.gms.ads.AdSize.BANNER)
+        adView.adUnitId = AdIds.banner()
+        val lp = LinearLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        lp.gravity = Gravity.CENTER_HORIZONTAL
+        box.addView(adView, lp)
+        content.addView(
+            box,
+            android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        adView.loadAd(com.google.android.gms.ads.AdRequest.Builder().build())
+        updateVoiceLeft()
+    }
+
+    private fun updateVoiceLeft() {
+        findViewById<TextView>(R.id.tvVoiceLeft).text =
+            "Free voice messages left today: " + VoiceQuota.left(this)
+    }
+
+    private fun canMakeVoice(): Boolean = VoiceQuota.left(this) > 0
+
+    private fun askForMoreVoices() {
+        AlertDialog.Builder(this)
+            .setTitle("Free voice messages used up")
+            .setMessage("Watch a short ad to get " + VoiceQuota.BONUS + " more voice messages today.")
+            .setPositiveButton("WATCH AD") { _, _ ->
+                RewardedManager.show(
+                    this,
+                    onReward = {
+                        VoiceQuota.addBonus(this)
+                        updateVoiceLeft()
+                        Toast.makeText(this, "You got " + VoiceQuota.BONUS + " more voice messages", Toast.LENGTH_LONG).show()
+                    },
+                    onNotReady = {
+                        Toast.makeText(this, "Ad is not ready yet, try again in a moment", Toast.LENGTH_LONG).show()
+                    }
+                )
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun onVoiceCreated() {
+        VoiceQuota.use(this)
+        updateVoiceLeft()
+        InterstitialManager.showIfAllowed(this)
     }
 
     private fun setupSlider(seekId: Int, labelId: Int, value: Float, onChange: (Float) -> Unit) {

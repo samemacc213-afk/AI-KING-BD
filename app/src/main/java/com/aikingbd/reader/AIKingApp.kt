@@ -9,7 +9,11 @@ class AIKingApp : Application() {
     override fun onCreate() {
         super.onCreate()
         MobileAds.initialize(this) {
-            Handler(Looper.getMainLooper()).post { AppOpenManager.preload(this) }
+            Handler(Looper.getMainLooper()).post {
+                AppOpenManager.preload(this)
+                InterstitialManager.preload(this)
+                RewardedManager.preload(this)
+            }
         }
     }
 }

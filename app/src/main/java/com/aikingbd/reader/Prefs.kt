@@ -57,6 +57,18 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("flashOn", false)
         set(v) = sp.edit().putBoolean("flashOn", v).apply()
 
+    var voiceDay: String
+        get() = sp.getString("voiceDay", "") ?: ""
+        set(v) = sp.edit().putString("voiceDay", v).apply()
+
+    var voiceUsed: Int
+        get() = sp.getInt("voiceUsed", 0)
+        set(v) = sp.edit().putInt("voiceUsed", v).apply()
+
+    var voiceBonus: Int
+        get() = sp.getInt("voiceBonus", 0)
+        set(v) = sp.edit().putInt("voiceBonus", v).apply()
+
     var apiKey: String
         get() = sp.getString("apiKey", "") ?: ""
         set(v) = sp.edit().putString("apiKey", v).apply()

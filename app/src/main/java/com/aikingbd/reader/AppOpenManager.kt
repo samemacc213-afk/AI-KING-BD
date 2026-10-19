@@ -24,6 +24,8 @@ object AppOpenManager {
 
     fun isReady(): Boolean = fresh()
 
+    fun lastShown(): Long = lastShownAt
+
     fun preload(ctx: Context) {
         if (loading || fresh()) return
         loading = true

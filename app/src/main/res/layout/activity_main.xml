@@ -747,6 +747,15 @@
                 android:visibility="gone" />
 
             <TextView
+                android:id="@+id/tvVoiceLeft"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text=""
+                android:textColor="@color/navy_text"
+                android:textSize="13sp" />
+
+            <TextView
                 android:id="@+id/tvVoiceStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
