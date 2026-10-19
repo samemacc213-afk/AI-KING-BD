@@ -3,34 +3,42 @@ package com.aikingbd.reader
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Typeface
-import android.net.Uri
 import android.graphics.Paint
+import android.graphics.Typeface
+import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.RadioButton
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
-import android.media.MediaPlayer
-import androidx.appcompat.app.AlertDialog
-import android.view.View
-import android.widget.ImageView
-import androidx.core.content.FileProvider
-import com.google.android.gms.ads.MobileAds
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doAfterTextChanged
+import com.google.android.gms.ads.AdListener
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.LoadAdError
 import java.io.File
 import java.util.Locale
 import kotlin.math.min
@@ -40,25 +48,59 @@ class MainActivity : AppCompatActivity() {
 
     private companion object {
         const val SAMPLE = "আমি আপনার কপি করা লেখা পড়ে শোনাব।"
+        const val TWO_MIN = 120_000L
     }
 
     private lateinit var prefs: Prefs
     private lateinit var switchFloat: SwitchCompat
     private lateinit var tvStatus: TextView
     private lateinit var tvPermission: TextView
-    private val radios = mutableMapOf<String, RadioButton>()
+    private var tvLeft: TextView? = null
+    private var lastVoice: VoiceResult? = null
+    private var voicePlayer: MediaPlayer? = null
+    private var voiceBusy = false
+    private var timerRunning = false
+    private var adView: AdView? = null
+    private val handler = Handler(Looper.getMainLooper())
 
     private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) savePhoto(uri)
     }
 
+    private val adTick = object : Runnable {
+        override fun run() {
+            if (!timerRunning) return
+            if (readyForAd()) {
+                Toast.makeText(this@MainActivity, "Ad starting...", Toast.LENGTH_SHORT).show()
+                handler.postDelayed({
+                    if (timerRunning && readyForAd()) {
+                        val shown = InterstitialManager.showNow(this@MainActivity) {}
+                        handler.postDelayed(this, if (shown) TWO_MIN else 20_000L)
+                    } else {
+                        handler.postDelayed(this, 5_000L)
+                    }
+                }, 2000)
+            } else {
+                handler.postDelayed(this, 5_000L)
+            }
+        }
+    }
+
+    private fun readyForAd(): Boolean {
+        if (AdState.showing) return false
+        if (voiceBusy || voicePlayer != null || Speaker.isSpeaking()) return false
+        if (!hasWindowFocus()) return false
+        val ime = ViewCompat.getRootWindowInsets(window.decorView)
+            ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        return !ime
+    }
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        
         prefs = Prefs(this)
-        setupAdsAndQuota()
-        setupFlashCard()
 
         switchFloat = findViewById(R.id.switchFloat)
         tvStatus = findViewById(R.id.tvStatus)
@@ -112,32 +154,119 @@ class MainActivity : AppCompatActivity() {
         et.setText(prefs.apiKey)
         et.doAfterTextChanged { prefs.apiKey = it?.toString()?.trim() ?: "" }
 
-        setupVoiceMessage()
-
         val sk = findViewById<EditText>(R.id.etSarvamKey)
         sk.setText(prefs.sarvamKey)
         sk.doAfterTextChanged { prefs.sarvamKey = it?.toString()?.trim() ?: "" }
 
         setupLinks()
         setupEleven()
-
         setupVoicePickers()
+        setupVoiceMessage()
+        setupFlashCard()
+        setupNative()
+        setupBanner()
     }
+
+    // ---------------- ads ----------------
+
+    private fun setupBanner() {
+        val content = findViewById<ViewGroup>(android.R.id.content)
+        val scroll = content.getChildAt(0)
+        content.removeView(scroll)
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setBackgroundColor(ContextCompat.getColor(this, R.color.navy))
+        box.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        val av = AdView(this)
+        av.setAdSize(AdSize.BANNER)
+        av.adUnitId = AdIds.banner()
+        av.adListener = object : AdListener() {
+            override fun onAdFailedToLoad(error: LoadAdError) {
+                handler.postDelayed({ av.loadAd(AdRequest.Builder().build()) }, 30_000L)
+            }
+        }
+        val lp = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        lp.gravity = Gravity.CENTER_HORIZONTAL
+        box.addView(av, lp)
+
+        content.addView(
+            box,
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        av.loadAd(AdRequest.Builder().build())
+        adView = av
+    }
+
+    private fun setupNative() {
+        val anchor = findViewById<View>(R.id.etMessage) ?: return
+        val card = anchor.parent as? View ?: return
+        val holder = card.parent as? ViewGroup ?: return
+        NativeAdHelper.attach(this, holder, holder.indexOfChild(card))
+    }
+
+    private fun updateVoiceLeft() {
+        tvLeft?.text = "Free voice messages left today: " + VoiceQuota.left(this)
+    }
+
+    private fun askForMoreVoices() {
+        AlertDialog.Builder(this)
+            .setTitle("Free voice messages used up")
+            .setMessage("Watch a short ad to get " + VoiceQuota.BONUS + " more voice messages today.")
+            .setPositiveButton("WATCH AD") { _, _ -> watchRewarded() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun watchRewarded() {
+        val reward = {
+            VoiceQuota.addBonus(this)
+            updateVoiceLeft()
+            Toast.makeText(this, "You got " + VoiceQuota.BONUS + " more voice messages", Toast.LENGTH_LONG).show()
+        }
+        RewardedManager.show(this, onReward = reward, onNotReady = {
+            RewardedInterstitialManager.show(this, onReward = reward, onNotReady = {
+                Toast.makeText(this, "Ad is not ready yet, try again in a moment", Toast.LENGTH_LONG).show()
+            })
+        })
+    }
+
+    // ---------------- lifecycle ----------------
 
     override fun onStart() {
         super.onStart()
         AppOpenManager.showIfReady(this)
+        timerRunning = true
+        handler.removeCallbacks(adTick)
+        handler.postDelayed(adTick, TWO_MIN)
     }
 
     override fun onResume() {
         super.onResume()
-        refreshFlashStatus()
         val granted = Settings.canDrawOverlays(this)
         tvPermission.text = if (granted) "Overlay Permission • Granted" else "Overlay Permission"
         val on = prefs.enabled && granted
         if (switchFloat.isChecked != on) switchFloat.isChecked = on
         renderStatus(on)
+        refreshFlashStatus()
     }
+
+    override fun onStop() {
+        timerRunning = false
+        handler.removeCallbacks(adTick)
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
+        try { voicePlayer?.release() } catch (_: Exception) {}
+        voicePlayer = null
+        adView?.destroy()
+        super.onDestroy()
+    }
+
+    // ---------------- floating button ----------------
 
     private fun renderStatus(on: Boolean) {
         tvStatus.text = if (on) "Currently Enabled" else "Currently Disabled"
@@ -183,181 +312,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private var voicePlayer: MediaPlayer? = null
-
-    private fun setupVoicePickers() {
-        val floatBtn = findViewById<TextView>(R.id.btnFloatVoice)
-        val msgBtn = findViewById<TextView>(R.id.btnMsgVoice)
-        if (prefs.voiceId.isEmpty()) prefs.voiceId = Voices.list[0].id
-        if (prefs.msgVoiceId.isEmpty() || Voices.msgList.none { it.id == prefs.msgVoiceId }) prefs.msgVoiceId = Voices.msgList[0].id
-        floatBtn.text = Voices.find(prefs.voiceId).label + "  ▼"
-        msgBtn.text = Voices.findMsg(prefs.msgVoiceId).label + "  ▼"
-
-        floatBtn.setOnClickListener {
-            pickVoice("Floating button voice", prefs.voiceId) { id ->
-                prefs.voiceId = id
-                floatBtn.text = Voices.find(id).label + "  ▼"
-                if (prefs.apiKey.isBlank()) {
-                    Toast.makeText(this, "Add your free Gemini key to hear this voice", Toast.LENGTH_LONG).show()
-                } else {
-                    Speaker.speak(this, SAMPLE)
-                }
-            }
-        }
-        msgBtn.setOnClickListener {
-            pickVoice("Voice message voice", prefs.msgVoiceId, Voices.msgList) { id ->
-                prefs.msgVoiceId = id
-                msgBtn.text = Voices.findMsg(id).label + "  ▼"
-            }
-        }
-        findViewById<TextView>(R.id.btnPlayVoice).setOnClickListener { playLastVoice() }
-    }
-
-    private fun pickVoice(title: String, current: String, opts: List<VoiceOption> = Voices.list, onPicked: (String) -> Unit) {
-        val labels = opts.map { it.label }.toTypedArray()
-        val checked = opts.indexOfFirst { it.id == current }.coerceAtLeast(0)
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
-                onPicked(opts[which].id)
-                dialog.dismiss()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun playLastVoice() {
-        val v = lastVoice ?: return
-        val btn = findViewById<TextView>(R.id.btnPlayVoice)
-        val playing = voicePlayer
-        if (playing != null) {
-            try { playing.stop() } catch (_: Exception) {}
-            try { playing.release() } catch (_: Exception) {}
-            voicePlayer = null
-            btn.text = "▶ PLAY VOICE"
-            return
-        }
-        try {
-            val mp = MediaPlayer()
-            mp.setDataSource(v.file.absolutePath)
-            mp.setOnCompletionListener {
-                try { it.release() } catch (_: Exception) {}
-                voicePlayer = null
-                btn.text = "▶ PLAY VOICE"
-            }
-            mp.prepare()
-            mp.start()
-            voicePlayer = mp
-            btn.text = "■ STOP"
-        } catch (e: Exception) {
-            Toast.makeText(this, "Could not play this voice", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    override fun onDestroy() {
-        try { voicePlayer?.release() } catch (_: Exception) {}
-        voicePlayer = null
-        super.onDestroy()
-    }
-
-    private var lastVoice: VoiceResult? = null
-
-    private fun setupVoiceMessage() {
-        val msg = findViewById<EditText>(R.id.etMessage)
-        val btn = findViewById<TextView>(R.id.btnCreateVoice)
-        val status = findViewById<TextView>(R.id.tvVoiceStatus)
-        val row = findViewById<LinearLayout>(R.id.shareRow)
-
-        btn.setOnClickListener {
-            val text = msg.text.toString().trim()
-            if (text.isEmpty()) {
-                Toast.makeText(this, "Type a message first", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            if (!canMakeVoice()) {
-                askForMoreVoices()
-                return@setOnClickListener
-            }
-            btn.isEnabled = false
-            btn.alpha = 0.5f
-            row.visibility = View.GONE
-            status.visibility = View.VISIBLE
-            status.text = "Making voice, please wait..."
-            findViewById<TextView>(R.id.btnPlayVoice).visibility = View.GONE
-            VoiceMaker.make(this, text) { result ->
-                btn.isEnabled = true
-                btn.alpha = 1f
-                if (result == null) {
-                    status.text = "Could not make voice. Check internet and try again."
-                } else {
-                    lastVoice = result
-                    onVoiceCreated()
-                    findViewById<TextView>(R.id.btnPlayVoice).visibility = View.VISIBLE
-                    status.text = if (result.note.isNotEmpty()) "Backup voice used - " + result.note else "Voice ready. Tap an app to send:"
-                    showShareRow(row, result)
-                }
-            }
-        }
-    }
-
-    private fun appIcon(pkg: String) = try {
-        packageManager.getApplicationIcon(pkg)
-    } catch (e: Exception) {
-        null
-    }
-
-    private fun showShareRow(row: LinearLayout, result: VoiceResult) {
-        row.removeAllViews()
-        row.visibility = View.VISIBLE
-        val dp = resources.displayMetrics.density
-        val size = (52 * dp).toInt()
-        val gap = (14 * dp).toInt()
-
-        val apps = listOf("com.whatsapp", "com.imo.android.imoim", "com.facebook.orca")
-        for (pkg in apps) {
-            val icon = appIcon(pkg) ?: continue
-            val iv = ImageView(this)
-            iv.setImageDrawable(icon)
-            iv.layoutParams = LinearLayout.LayoutParams(size, size).apply { marginEnd = gap }
-            iv.setOnClickListener { sendVoice(result, pkg) }
-            row.addView(iv)
-        }
-
-        val more = TextView(this)
-        more.text = "MORE"
-        more.setTextColor(ContextCompat.getColor(this, R.color.navy_text))
-        more.textSize = 14f
-        more.typeface = Typeface.SERIF
-        more.gravity = Gravity.CENTER
-        more.setBackgroundResource(R.drawable.bg_gold_button)
-        more.layoutParams = LinearLayout.LayoutParams((84 * dp).toInt(), (44 * dp).toInt())
-        more.setOnClickListener { sendVoice(result, null) }
-        row.addView(more)
-    }
-
-    private fun sendVoice(result: VoiceResult, pkg: String?) {
-        try {
-            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", result.file)
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = result.mime
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                if (pkg != null) setPackage(pkg)
-            }
-            if (pkg == null) {
-                startActivity(Intent.createChooser(intent, "Send voice"))
-            } else {
-                startActivity(intent)
-            }
-        } catch (e: Exception) {
-            Toast.makeText(this, "Could not open that app", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun selectVoice(id: String) {
-        prefs.voiceId = id
-        radios.forEach { (k, rb) -> rb.isChecked = (k == id) }
-    }
+    // ---------------- key links + ElevenLabs ----------------
 
     private fun setupLinks() {
         for ((linkId, url) in listOf(
@@ -427,8 +382,208 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ---------------- voice pickers ----------------
+
+    private fun setupVoicePickers() {
+        val floatBtn = findViewById<TextView>(R.id.btnFloatVoice)
+        val msgBtn = findViewById<TextView>(R.id.btnMsgVoice)
+        if (prefs.voiceId.isEmpty()) prefs.voiceId = Voices.list[0].id
+        if (prefs.msgVoiceId.isEmpty() || Voices.msgList.none { it.id == prefs.msgVoiceId }) {
+            prefs.msgVoiceId = Voices.msgList[0].id
+        }
+        floatBtn.text = Voices.find(prefs.voiceId).label + "  ▼"
+        msgBtn.text = Voices.findMsg(prefs.msgVoiceId).label + "  ▼"
+
+        floatBtn.setOnClickListener {
+            pickVoice("Floating button voice", prefs.voiceId, Voices.list) { id ->
+                prefs.voiceId = id
+                floatBtn.text = Voices.find(id).label + "  ▼"
+                if (prefs.apiKey.isBlank()) {
+                    Toast.makeText(this, "Add your free Gemini key to hear this voice", Toast.LENGTH_LONG).show()
+                } else {
+                    Speaker.speak(this, SAMPLE)
+                }
+            }
+        }
+        msgBtn.setOnClickListener {
+            pickVoice("Voice message voice", prefs.msgVoiceId, Voices.msgList) { id ->
+                prefs.msgVoiceId = id
+                msgBtn.text = Voices.findMsg(id).label + "  ▼"
+            }
+        }
+        findViewById<TextView>(R.id.btnPlayVoice).setOnClickListener { playLastVoice() }
+    }
+
+    private fun pickVoice(title: String, current: String, opts: List<VoiceOption>, onPicked: (String) -> Unit) {
+        val labels = opts.map { it.label }.toTypedArray()
+        val checked = opts.indexOfFirst { it.id == current }.coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                onPicked(opts[which].id)
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // ---------------- voice message ----------------
+
+    private fun setupVoiceMessage() {
+        val msg = findViewById<EditText>(R.id.etMessage)
+        val btn = findViewById<TextView>(R.id.btnCreateVoice)
+        val status = findViewById<TextView>(R.id.tvVoiceStatus)
+        val row = findViewById<LinearLayout>(R.id.shareRow)
+        val play = findViewById<TextView>(R.id.btnPlayVoice)
+
+        val parent = btn.parent as ViewGroup
+        val left = TextView(this)
+        left.textSize = 13f
+        left.setTextColor(ContextCompat.getColor(this, R.color.navy_text))
+        left.setPadding(0, dp(10), 0, 0)
+        parent.addView(left, parent.indexOfChild(btn) + 1)
+        tvLeft = left
+        updateVoiceLeft()
+
+        btn.setOnClickListener {
+            val text = msg.text.toString().trim()
+            if (text.isEmpty()) {
+                Toast.makeText(this, "Type a message first", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (VoiceQuota.left(this) <= 0) {
+                askForMoreVoices()
+                return@setOnClickListener
+            }
+            stopVoicePlayback()
+            voiceBusy = true
+            btn.isEnabled = false
+            btn.alpha = 0.5f
+            row.visibility = View.GONE
+            play.visibility = View.GONE
+            status.visibility = View.VISIBLE
+            status.text = "Making voice, please wait..."
+
+            VoiceMaker.make(this, text) { result ->
+                voiceBusy = false
+                btn.isEnabled = true
+                btn.alpha = 1f
+                if (result == null) {
+                    status.text = "Could not make voice. Check internet and try again."
+                    return@make
+                }
+                VoiceQuota.use(this)
+                updateVoiceLeft()
+                lastVoice = result
+                status.text = "Showing a short ad, then your voice is ready..."
+                InterstitialManager.showNow(this) { revealVoice(result) }
+            }
+        }
+    }
+
+    private fun revealVoice(result: VoiceResult) {
+        val status = findViewById<TextView>(R.id.tvVoiceStatus)
+        val row = findViewById<LinearLayout>(R.id.shareRow)
+        val play = findViewById<TextView>(R.id.btnPlayVoice)
+        status.visibility = View.VISIBLE
+        status.text = if (result.note.isNotEmpty()) "Backup voice used - " + result.note
+        else "Voice ready. Tap an app to send:"
+        play.visibility = View.VISIBLE
+        play.text = "▶ PLAY VOICE"
+        showShareRow(row, result)
+    }
+
+    private fun stopVoicePlayback() {
+        val p = voicePlayer
+        voicePlayer = null
+        if (p != null) {
+            try { p.stop() } catch (_: Exception) {}
+            try { p.release() } catch (_: Exception) {}
+        }
+        findViewById<TextView>(R.id.btnPlayVoice).text = "▶ PLAY VOICE"
+    }
+
+    private fun playLastVoice() {
+        val v = lastVoice ?: return
+        if (voicePlayer != null) {
+            stopVoicePlayback()
+            return
+        }
+        val btn = findViewById<TextView>(R.id.btnPlayVoice)
+        try {
+            val mp = MediaPlayer()
+            mp.setDataSource(v.file.absolutePath)
+            mp.setOnCompletionListener {
+                try { it.release() } catch (_: Exception) {}
+                voicePlayer = null
+                btn.text = "▶ PLAY VOICE"
+            }
+            mp.prepare()
+            mp.start()
+            voicePlayer = mp
+            btn.text = "■ STOP"
+        } catch (e: Exception) {
+            Toast.makeText(this, "Could not play this voice", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun appIcon(pkg: String) = try {
+        packageManager.getApplicationIcon(pkg)
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun showShareRow(row: LinearLayout, result: VoiceResult) {
+        row.removeAllViews()
+        row.visibility = View.VISIBLE
+        val size = dp(52)
+        val gap = dp(14)
+
+        val apps = listOf("com.whatsapp", "com.imo.android.imoim", "com.facebook.orca")
+        for (pkg in apps) {
+            val icon = appIcon(pkg) ?: continue
+            val iv = ImageView(this)
+            iv.setImageDrawable(icon)
+            iv.layoutParams = LinearLayout.LayoutParams(size, size).apply { marginEnd = gap }
+            iv.setOnClickListener { sendVoice(result, pkg) }
+            row.addView(iv)
+        }
+
+        val more = TextView(this)
+        more.text = "MORE"
+        more.setTextColor(ContextCompat.getColor(this, R.color.navy_text))
+        more.textSize = 14f
+        more.typeface = Typeface.SERIF
+        more.gravity = Gravity.CENTER
+        more.setBackgroundResource(R.drawable.bg_gold_button)
+        more.layoutParams = LinearLayout.LayoutParams(dp(84), dp(44))
+        more.setOnClickListener { sendVoice(result, null) }
+        row.addView(more)
+    }
+
+    private fun sendVoice(result: VoiceResult, pkg: String?) {
+        try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", result.file)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = result.mime
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                if (pkg != null) setPackage(pkg)
+            }
+            if (pkg == null) {
+                startActivity(Intent.createChooser(intent, "Send voice"))
+            } else {
+                startActivity(intent)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Could not open that app", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // ---------------- call flash ----------------
+
     private fun flashAccessGranted(): Boolean =
-        androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
+        NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
 
     private fun openFlashAccess() {
         try {
@@ -468,70 +623,7 @@ class MainActivity : AppCompatActivity() {
         refreshFlashStatus()
     }
 
-    private fun setupAdsAndQuota() {
-        val content = findViewById<android.view.ViewGroup>(android.R.id.content)
-        val scroll = content.getChildAt(0)
-        content.removeView(scroll)
-        val box = LinearLayout(this)
-        box.orientation = LinearLayout.VERTICAL
-        box.setBackgroundColor(ContextCompat.getColor(this, R.color.navy))
-        box.addView(
-            scroll,
-            LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-        )
-        val adView = com.google.android.gms.ads.AdView(this)
-        adView.setAdSize(com.google.android.gms.ads.AdSize.BANNER)
-        adView.adUnitId = AdIds.banner()
-        val lp = LinearLayout.LayoutParams(
-            android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        lp.gravity = Gravity.CENTER_HORIZONTAL
-        box.addView(adView, lp)
-        content.addView(
-            box,
-            android.view.ViewGroup.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        )
-        adView.loadAd(com.google.android.gms.ads.AdRequest.Builder().build())
-        updateVoiceLeft()
-    }
-
-    private fun updateVoiceLeft() {
-        findViewById<TextView>(R.id.tvVoiceLeft).text =
-            "Free voice messages left today: " + VoiceQuota.left(this)
-    }
-
-    private fun canMakeVoice(): Boolean = VoiceQuota.left(this) > 0
-
-    private fun askForMoreVoices() {
-        AlertDialog.Builder(this)
-            .setTitle("Free voice messages used up")
-            .setMessage("Watch a short ad to get " + VoiceQuota.BONUS + " more voice messages today.")
-            .setPositiveButton("WATCH AD") { _, _ ->
-                RewardedManager.show(
-                    this,
-                    onReward = {
-                        VoiceQuota.addBonus(this)
-                        updateVoiceLeft()
-                        Toast.makeText(this, "You got " + VoiceQuota.BONUS + " more voice messages", Toast.LENGTH_LONG).show()
-                    },
-                    onNotReady = {
-                        Toast.makeText(this, "Ad is not ready yet, try again in a moment", Toast.LENGTH_LONG).show()
-                    }
-                )
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun onVoiceCreated() {
-        VoiceQuota.use(this)
-        updateVoiceLeft()
-        InterstitialManager.showIfAllowed(this)
-    }
+    // ---------------- sliders ----------------
 
     private fun setupSlider(seekId: Int, labelId: Int, value: Float, onChange: (Float) -> Unit) {
         val seek = findViewById<SeekBar>(seekId)
@@ -544,6 +636,7 @@ class MainActivity : AppCompatActivity() {
                 label.text = String.format(Locale.US, "%.1f", v)
                 if (fromUser) onChange(v)
             }
+
             override fun onStartTrackingTouch(sb: SeekBar?) {}
             override fun onStopTrackingTouch(sb: SeekBar?) {}
         })

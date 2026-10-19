@@ -10,12 +10,8 @@ import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 
 object InterstitialManager {
-    private const val COOLDOWN_MS = 3 * 60 * 1000L
-
     private var ad: InterstitialAd? = null
     private var loading = false
-    private var showing = false
-    private var lastShownAt = 0L
 
     fun preload(ctx: Context) {
         if (loading || ad != null) return
@@ -37,35 +33,29 @@ object InterstitialManager {
         )
     }
 
-    fun showIfAllowed(activity: Activity) {
-        if (showing) return
-        val now = System.currentTimeMillis()
-        if (lastShownAt != 0L && now - lastShownAt < COOLDOWN_MS) return
-        val openAt = AppOpenManager.lastShown()
-        if (openAt != 0L && now - openAt < 60_000L) return
-
+    fun showNow(activity: Activity, onDone: () -> Unit): Boolean {
         val a = ad
-        if (a == null) {
+        if (a == null || AdState.showing) {
             preload(activity)
-            return
+            onDone()
+            return false
         }
         ad = null
-        showing = true
+        AdState.showing = true
         a.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdShowedFullScreenContent() {
-                lastShownAt = System.currentTimeMillis()
-            }
-
             override fun onAdDismissedFullScreenContent() {
-                showing = false
+                AdState.closed()
                 preload(activity)
+                onDone()
             }
 
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
-                showing = false
+                AdState.closed()
                 preload(activity)
+                onDone()
             }
         }
         a.show(activity)
+        return true
     }
 }

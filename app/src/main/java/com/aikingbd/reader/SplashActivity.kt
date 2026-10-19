@@ -24,7 +24,7 @@ class SplashActivity : AppCompatActivity() {
         override fun run() {
             if (finishedFlow) return
             val waited = SystemClock.uptimeMillis() - started
-            if (!adStarted && AppOpenManager.isReady() && waited >= 500) {
+            if (!adStarted && AppOpenManager.isReady() && waited >= 400) {
                 adStarted = true
                 AppOpenManager.showIfReady(this@SplashActivity) { openMain() }
                 return
@@ -33,31 +33,31 @@ class SplashActivity : AppCompatActivity() {
                 openMain()
                 return
             }
-            handler.postDelayed(this, 120)
+            handler.postDelayed(this, 100)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val dp = resources.displayMetrics.density
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setBackgroundColor(ContextCompat.getColor(this@SplashActivity, R.color.navy))
-        }
-        val logo = ImageView(this).apply {
-            setImageResource(R.drawable.logo)
-            layoutParams = LinearLayout.LayoutParams((110 * dp).toInt(), (110 * dp).toInt())
-        }
-        val name = TextView(this).apply {
-            text = "AI KING BD"
-            setTextColor(Color.WHITE)
-            textSize = 28f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
-            letterSpacing = 0.08f
-            gravity = Gravity.CENTER
-            setPadding(0, (18 * dp).toInt(), 0, 0)
-        }
+        val root = LinearLayout(this)
+        root.orientation = LinearLayout.VERTICAL
+        root.gravity = Gravity.CENTER
+        root.setBackgroundColor(ContextCompat.getColor(this, R.color.navy))
+
+        val logo = ImageView(this)
+        logo.setImageResource(R.drawable.logo)
+        logo.layoutParams = LinearLayout.LayoutParams((110 * dp).toInt(), (110 * dp).toInt())
+
+        val name = TextView(this)
+        name.text = "AI KING BD"
+        name.setTextColor(Color.WHITE)
+        name.textSize = 28f
+        name.typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+        name.letterSpacing = 0.08f
+        name.gravity = Gravity.CENTER
+        name.setPadding(0, (18 * dp).toInt(), 0, 0)
+
         root.addView(logo)
         root.addView(name)
         setContentView(root)

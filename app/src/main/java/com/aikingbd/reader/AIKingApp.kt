@@ -13,6 +13,7 @@ class AIKingApp : Application() {
                 AppOpenManager.preload(this)
                 InterstitialManager.preload(this)
                 RewardedManager.preload(this)
+                RewardedInterstitialManager.preload(this)
             }
         }
     }

@@ -35,18 +35,21 @@ object RewardedManager {
 
     fun show(activity: Activity, onReward: () -> Unit, onNotReady: () -> Unit) {
         val a = ad
-        if (a == null) {
+        if (a == null || AdState.showing) {
             preload(activity)
             onNotReady()
             return
         }
         ad = null
+        AdState.showing = true
         a.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
+                AdState.closed()
                 preload(activity)
             }
 
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                AdState.closed()
                 preload(activity)
                 onNotReady()
             }
