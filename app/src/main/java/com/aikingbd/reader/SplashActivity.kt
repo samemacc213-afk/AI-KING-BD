@@ -29,7 +29,7 @@ class SplashActivity : AppCompatActivity() {
                 AppOpenManager.showIfReady(this@SplashActivity) { openMain() }
                 return
             }
-            if (!adStarted && waited >= 3500) {
+            if (!adStarted && waited >= 6000) {
                 openMain()
                 return
             }
@@ -63,7 +63,18 @@ class SplashActivity : AppCompatActivity() {
         setContentView(root)
 
         started = SystemClock.uptimeMillis()
+        AdKick.start(this)
         handler.post(tick)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AdState.started()
+    }
+
+    override fun onStop() {
+        AdState.stopped()
+        super.onStop()
     }
 
     private fun openMain() {

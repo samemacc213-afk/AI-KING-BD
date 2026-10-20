@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -20,6 +22,7 @@ import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
 
 object NativeAdHelper {
+    private val handler = Handler(Looper.getMainLooper())
 
     fun attach(activity: Activity, holder: ViewGroup, index: Int) {
         if (holder !is LinearLayout) return
@@ -37,12 +40,19 @@ object NativeAdHelper {
             return
         }
 
-        AdLoader.Builder(activity, AdIds.native())
+        var attempt = 0
+        lateinit var loader: AdLoader
+        fun load() {
+            loader.loadAd(AdRequest.Builder().build())
+        }
+
+        loader = AdLoader.Builder(activity, AdIds.native())
             .forNativeAd { ad ->
                 if (activity.isDestroyed) {
                     ad.destroy()
                     return@forNativeAd
                 }
+                attempt = 0
                 frame.removeAllViews()
                 frame.addView(build(activity, ad))
                 frame.visibility = View.VISIBLE
@@ -50,11 +60,15 @@ object NativeAdHelper {
             .withAdListener(object : AdListener() {
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     frame.visibility = View.GONE
+                    attempt++
+                    handler.postDelayed({
+                        if (!activity.isDestroyed && AdState.foreground) load()
+                    }, AdRetry.delayFor(attempt - 1))
                 }
             })
             .withNativeAdOptions(NativeAdOptions.Builder().build())
             .build()
-            .loadAd(AdRequest.Builder().build())
+        load()
     }
 
     private fun build(ctx: Context, ad: NativeAd): NativeAdView {

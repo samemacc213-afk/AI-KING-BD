@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
     private var voiceBusy = false
     private var timerRunning = false
     private var adView: AdView? = null
+    private var bannerFails = 0
     private val handler = Handler(Looper.getMainLooper())
 
     private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -83,6 +84,14 @@ class MainActivity : AppCompatActivity() {
             } else {
                 handler.postDelayed(this, 5_000L)
             }
+        }
+    }
+
+    private val keepAlive = object : Runnable {
+        override fun run() {
+            if (!timerRunning) return
+            AdKick.start(this@MainActivity)
+            handler.postDelayed(this, 30_000L)
         }
     }
 
@@ -182,8 +191,16 @@ class MainActivity : AppCompatActivity() {
         av.setAdSize(AdSize.BANNER)
         av.adUnitId = AdIds.banner()
         av.adListener = object : AdListener() {
+            override fun onAdLoaded() {
+                bannerFails = 0
+            }
+
             override fun onAdFailedToLoad(error: LoadAdError) {
-                handler.postDelayed({ av.loadAd(AdRequest.Builder().build()) }, 30_000L)
+                bannerFails++
+                val wait = minOf(10_000L * bannerFails, 30_000L)
+                handler.postDelayed({
+                    if (timerRunning) av.loadAd(AdRequest.Builder().build())
+                }, wait)
             }
         }
         val lp = LinearLayout.LayoutParams(
@@ -236,10 +253,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        AppOpenManager.showIfReady(this)
+        AdState.started()
+        AdKick.start(this)
+        AppOpenManager.showIfReady(this, lateOk = true)
         timerRunning = true
         handler.removeCallbacks(adTick)
         handler.postDelayed(adTick, TWO_MIN)
+        handler.removeCallbacks(keepAlive)
+        handler.postDelayed(keepAlive, 30_000L)
     }
 
     override fun onResume() {
@@ -253,6 +274,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        AdState.stopped()
+        handler.removeCallbacks(keepAlive)
         timerRunning = false
         handler.removeCallbacks(adTick)
         super.onStop()
@@ -476,7 +499,7 @@ class MainActivity : AppCompatActivity() {
                 updateVoiceLeft()
                 lastVoice = result
                 status.text = "Showing a short ad, then your voice is ready..."
-                InterstitialManager.showNow(this) { revealVoice(result) }
+                InterstitialManager.showNow(this, 3000L) { revealVoice(result) }
             }
         }
     }

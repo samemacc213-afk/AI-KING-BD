@@ -2,6 +2,8 @@ package com.aikingbd.reader
 
 import android.app.Activity
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
@@ -10,24 +12,32 @@ import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAd
 import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAdLoadCallback
 
 object RewardedInterstitialManager {
+    private val handler = Handler(Looper.getMainLooper())
     private var ad: RewardedInterstitialAd? = null
     private var loading = false
+    private var attempt = 0
 
     fun preload(ctx: Context) {
         if (loading || ad != null) return
         loading = true
+        val app = ctx.applicationContext
         RewardedInterstitialAd.load(
-            ctx.applicationContext,
+            app,
             AdIds.rewardedInterstitial(),
             AdRequest.Builder().build(),
             object : RewardedInterstitialAdLoadCallback() {
                 override fun onAdLoaded(loaded: RewardedInterstitialAd) {
                     loading = false
+                    attempt = 0
                     ad = loaded
                 }
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     loading = false
+                    attempt++
+                    handler.postDelayed({
+                        if (AdState.foreground) preload(app)
+                    }, AdRetry.delayFor(attempt - 1))
                 }
             }
         )
