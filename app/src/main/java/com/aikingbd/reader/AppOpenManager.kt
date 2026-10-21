@@ -15,6 +15,7 @@ import com.google.android.gms.ads.appopen.AppOpenAd
 object AppOpenManager {
     private const val MAX_AGE_MS = 4 * 60 * 60 * 1000L
     private const val LATE_WINDOW_MS = 20_000L
+    private val RETRY = longArrayOf(3_000L, 15_000L, 60_000L)
 
     private val handler = Handler(Looper.getMainLooper())
     private var ad: AppOpenAd? = null
@@ -23,6 +24,9 @@ object AppOpenManager {
     private var attempt = 0
     private var waiting: Activity? = null
     private var waitUntil = 0L
+
+    // set by the splash screen when it already handled the app-open ad
+    @Volatile var skipNext = false
 
     private fun fresh(): Boolean =
         ad != null && System.currentTimeMillis() - loadedAt < MAX_AGE_MS
@@ -35,6 +39,7 @@ object AppOpenManager {
 
     fun preload(ctx: Context) {
         if (loading || fresh()) return
+        if (!AdGate.allow()) return
         loading = true
         val app = ctx.applicationContext
         AppOpenAd.load(
@@ -59,9 +64,11 @@ object AppOpenManager {
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     loading = false
                     attempt++
-                    handler.postDelayed({
-                        if (AdState.foreground) preload(app)
-                    }, AdRetry.delayFor(attempt - 1))
+                    if (attempt <= RETRY.size) {
+                        handler.postDelayed({
+                            if (AdState.foreground) preload(app)
+                        }, RETRY[attempt - 1])
+                    }
                 }
             }
         )
@@ -88,13 +95,11 @@ object AppOpenManager {
         a.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
                 AdState.closed()
-                preload(activity)
                 onDone?.invoke()
             }
 
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
                 AdState.closed()
-                preload(activity)
                 onDone?.invoke()
             }
         }

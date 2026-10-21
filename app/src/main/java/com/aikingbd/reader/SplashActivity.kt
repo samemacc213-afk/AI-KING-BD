@@ -26,6 +26,7 @@ class SplashActivity : AppCompatActivity() {
             val waited = SystemClock.uptimeMillis() - started
             if (!adStarted && AppOpenManager.isReady() && waited >= 400) {
                 adStarted = true
+                AppOpenManager.skipNext = true
                 AppOpenManager.showIfReady(this@SplashActivity, onDone = { openMain() })
                 return
             }

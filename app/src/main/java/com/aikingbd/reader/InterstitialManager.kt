@@ -17,8 +17,17 @@ object InterstitialManager {
     private var loading = false
     private var attempt = 0
 
+    fun isReady(): Boolean = ad != null
+
+    // called right before the ad is needed: starts a fresh set of tries
+    fun arm(ctx: Context) {
+        if (!loading && ad == null) attempt = 0
+        preload(ctx)
+    }
+
     fun preload(ctx: Context) {
         if (loading || ad != null) return
+        if (!AdGate.allow()) return
         loading = true
         val app = ctx.applicationContext
         InterstitialAd.load(
@@ -35,9 +44,11 @@ object InterstitialManager {
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     loading = false
                     attempt++
-                    handler.postDelayed({
-                        if (AdState.foreground) preload(app)
-                    }, AdRetry.delayFor(attempt - 1))
+                    if (attempt <= AdRetry.MAX_RETRIES) {
+                        handler.postDelayed({
+                            if (AdState.foreground) preload(app)
+                        }, AdRetry.delayFor(attempt - 1))
+                    }
                 }
             }
         )
@@ -54,13 +65,11 @@ object InterstitialManager {
         a.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
                 AdState.closed()
-                preload(activity)
                 onDone()
             }
 
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
                 AdState.closed()
-                preload(activity)
                 onDone()
             }
         }

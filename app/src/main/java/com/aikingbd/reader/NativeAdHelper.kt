@@ -61,9 +61,11 @@ object NativeAdHelper {
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     frame.visibility = View.GONE
                     attempt++
-                    handler.postDelayed({
-                        if (!activity.isDestroyed && AdState.foreground) load()
-                    }, AdRetry.delayFor(attempt - 1))
+                    if (attempt <= AdRetry.MAX_RETRIES) {
+                        handler.postDelayed({
+                            if (!activity.isDestroyed && AdState.foreground) load()
+                        }, AdRetry.delayFor(attempt - 1))
+                    }
                 }
             })
             .withNativeAdOptions(NativeAdOptions.Builder().build())

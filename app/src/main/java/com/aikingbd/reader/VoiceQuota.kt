@@ -32,9 +32,9 @@ object VoiceQuota {
         p.voiceUsed = p.voiceUsed + 1
     }
 
-    fun addBonus(ctx: Context) {
+    fun addBonus(ctx: Context, n: Int = BONUS) {
         val p = Prefs(ctx)
         roll(p)
-        p.voiceBonus = p.voiceBonus + BONUS
+        p.voiceBonus = p.voiceBonus + n
     }
 }

@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.google.android.gms.ads.MobileAds
+import java.util.ArrayDeque
 
 object AdState {
     @Volatile var showing = false
@@ -28,14 +29,29 @@ object AdState {
 }
 
 object AdRetry {
-    // wait before the next try after a failed ad request: 1s, 2s, 4s, 8s, 15s, then 30s
+    const val MAX_RETRIES = 3
+
+    // wait before the next try after a failed ad request: 10s, 30s, then 60s
     fun delayFor(attempt: Int): Long = when (attempt) {
-        0 -> 1000L
-        1 -> 2000L
-        2 -> 4000L
-        3 -> 8000L
-        4 -> 15000L
-        else -> 30000L
+        0 -> 10_000L
+        1 -> 30_000L
+        else -> 60_000L
+    }
+}
+
+// at most 6 ad requests per minute in total, so Google is never flooded
+object AdGate {
+    private val times = ArrayDeque<Long>()
+
+    @Synchronized
+    fun allow(): Boolean {
+        val now = System.currentTimeMillis()
+        while (times.isNotEmpty() && now - times.peekFirst() > 60_000L) {
+            times.pollFirst()
+        }
+        if (times.size >= 6) return false
+        times.addLast(now)
+        return true
     }
 }
 
@@ -50,24 +66,19 @@ object AdKick {
             main.post {
                 if (pending) {
                     pending = false
-                    loadAll(app)
+                    AppOpenManager.preload(app)
                 }
             }
         }
     }
 
+    // only the app-open ad is requested when the app starts or comes back
     fun start(ctx: Context) {
+        if (AdState.showing) return
         if (!initDone) {
             pending = true
             return
         }
-        loadAll(ctx.applicationContext)
-    }
-
-    private fun loadAll(ctx: Context) {
-        AppOpenManager.preload(ctx)
-        InterstitialManager.preload(ctx)
-        RewardedManager.preload(ctx)
-        RewardedInterstitialManager.preload(ctx)
+        AppOpenManager.preload(ctx.applicationContext)
     }
 }

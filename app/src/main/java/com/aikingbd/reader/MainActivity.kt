@@ -68,30 +68,47 @@ class MainActivity : AppCompatActivity() {
         if (uri != null) savePhoto(uri)
     }
 
+    private var adMiss = 0
+
+    private val preloadInter = Runnable {
+        if (timerRunning) InterstitialManager.arm(this)
+    }
+
     private val adTick = object : Runnable {
         override fun run() {
             if (!timerRunning) return
-            if (readyForAd()) {
-                Toast.makeText(this@MainActivity, "Ad starting...", Toast.LENGTH_SHORT).show()
-                handler.postDelayed({
-                    if (timerRunning && readyForAd()) {
-                        val shown = InterstitialManager.showNow(this@MainActivity) {}
-                        handler.postDelayed(this, if (shown) TWO_MIN else 20_000L)
-                    } else {
-                        handler.postDelayed(this, 5_000L)
-                    }
-                }, 2000)
-            } else {
+            if (!readyForAd()) {
                 handler.postDelayed(this, 5_000L)
+                return
             }
+            if (!InterstitialManager.isReady()) {
+                adMiss++
+                InterstitialManager.preload(this@MainActivity)
+                if (adMiss >= 3) {
+                    adMiss = 0
+                    handler.postDelayed(this, TWO_MIN)
+                } else {
+                    handler.postDelayed(this, 30_000L)
+                }
+                return
+            }
+            adMiss = 0
+            Toast.makeText(this@MainActivity, "Ad starting...", Toast.LENGTH_SHORT).show()
+            handler.postDelayed({
+                if (timerRunning && readyForAd()) {
+                    val shown = InterstitialManager.showNow(this@MainActivity) {}
+                    handler.postDelayed(this, if (shown) TWO_MIN else 30_000L)
+                } else {
+                    handler.postDelayed(this, 5_000L)
+                }
+            }, 2000)
         }
     }
 
     private val keepAlive = object : Runnable {
         override fun run() {
             if (!timerRunning) return
-            AdKick.start(this@MainActivity)
-            handler.postDelayed(this, 30_000L)
+            // no repeated ad requests
         }
     }
 
@@ -197,10 +214,11 @@ class MainActivity : AppCompatActivity() {
 
             override fun onAdFailedToLoad(error: LoadAdError) {
                 bannerFails++
-                val wait = minOf(10_000L * bannerFails, 30_000L)
-                handler.postDelayed({
-                    if (timerRunning) av.loadAd(AdRequest.Builder().build())
-                }, wait)
+                if (bannerFails <= AdRetry.MAX_RETRIES) {
+                    handler.postDelayed({
+                        if (timerRunning) av.loadAd(AdRequest.Builder().build())
+                    }, AdRetry.delayFor(bannerFails - 1))
+                }
             }
         }
         val lp = LinearLayout.LayoutParams(
@@ -242,9 +260,12 @@ class MainActivity : AppCompatActivity() {
             updateVoiceLeft()
             Toast.makeText(this, "You got " + VoiceQuota.BONUS + " more voice messages", Toast.LENGTH_LONG).show()
         }
-        RewardedManager.show(this, onReward = reward, onNotReady = {
-            RewardedInterstitialManager.show(this, onReward = reward, onNotReady = {
-                Toast.makeText(this, "Ad is not ready yet, try again in a moment", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Loading ad...", Toast.LENGTH_SHORT).show()
+        RewardedManager.loadAndShow(this, 8000L, onReward = reward, onFail = {
+            RewardedInterstitialManager.loadAndShow(this, 8000L, onReward = reward, onFail = {
+                VoiceQuota.addBonus(this, 1)
+                updateVoiceLeft()
+                Toast.makeText(this, "No ad available right now. Here is 1 extra voice message.", Toast.LENGTH_LONG).show()
             })
         })
     }
@@ -255,10 +276,22 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         AdState.started()
         AdKick.start(this)
-        AppOpenManager.showIfReady(this, lateOk = true)
+        if (AppOpenManager.skipNext) {
+            AppOpenManager.skipNext = false
+        } else {
+            AppOpenManager.showIfReady(this, lateOk = true)
+        }
+        adView?.let {
+            if (bannerFails >= 3) {
+                bannerFails = 0
+                it.loadAd(AdRequest.Builder().build())
+            }
+        }
         timerRunning = true
         handler.removeCallbacks(adTick)
         handler.postDelayed(adTick, TWO_MIN)
+        handler.removeCallbacks(preloadInter)
+        handler.postDelayed(preloadInter, TWO_MIN - 20_000L)
         handler.removeCallbacks(keepAlive)
         handler.postDelayed(keepAlive, 30_000L)
     }
@@ -275,6 +308,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         AdState.stopped()
+        handler.removeCallbacks(preloadInter)
         handler.removeCallbacks(keepAlive)
         timerRunning = false
         handler.removeCallbacks(adTick)
@@ -480,6 +514,7 @@ class MainActivity : AppCompatActivity() {
             }
             stopVoicePlayback()
             voiceBusy = true
+            InterstitialManager.arm(this)
             btn.isEnabled = false
             btn.alpha = 0.5f
             row.visibility = View.GONE
