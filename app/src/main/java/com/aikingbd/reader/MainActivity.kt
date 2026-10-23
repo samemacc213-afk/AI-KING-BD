@@ -57,6 +57,8 @@ class MainActivity : AppCompatActivity() {
     private var voicePlayer: MediaPlayer? = null
     private var adView: AdView? = null
     private var bannerFails = 0
+    private var bannerLoaded = false
+    private var lastBannerAt = 0L
     private var adsReady = false
     private val handler = Handler(Looper.getMainLooper())
 
@@ -158,16 +160,15 @@ class MainActivity : AppCompatActivity() {
         av.adUnitId = AdIds.banner()
         av.adListener = object : AdListener() {
             override fun onAdLoaded() {
+                bannerLoaded = true
                 bannerFails = 0
             }
 
             override fun onAdFailedToLoad(error: LoadAdError) {
+                bannerLoaded = false
                 bannerFails++
-                if (bannerFails <= 3) {
-                    handler.postDelayed({
-                        av.loadAd(AdRequest.Builder().build())
-                    }, 30_000L * bannerFails)
-                }
+                val wait = minOf(30_000L * bannerFails, 300_000L)
+                handler.postDelayed({ requestBanner() }, wait)
             }
         }
         val lp = LinearLayout.LayoutParams(
@@ -179,8 +180,16 @@ class MainActivity : AppCompatActivity() {
             box,
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
-        av.loadAd(AdRequest.Builder().build())
         adView = av
+        requestBanner()
+    }
+
+    private fun requestBanner() {
+        val av = adView ?: return
+        val now = System.currentTimeMillis()
+        if (now - lastBannerAt < 20_000L) return
+        lastBannerAt = now
+        av.loadAd(AdRequest.Builder().build())
     }
 
     // ---------------- lifecycle ----------------
@@ -188,6 +197,12 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         if (adsReady) AppOpenManager.showOnLaunch(this)
+        if (!bannerLoaded) requestBanner()
+    }
+
+    override fun onStop() {
+        AppOpenManager.keepForNext(this)
+        super.onStop()
     }
 
     override fun onResume() {
