@@ -31,14 +31,13 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doAfterTextChanged
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.MobileAds
 import java.io.File
 import java.util.Locale
 import kotlin.math.min
@@ -48,77 +47,21 @@ class MainActivity : AppCompatActivity() {
 
     private companion object {
         const val SAMPLE = "আমি আপনার কপি করা লেখা পড়ে শোনাব।"
-        const val TWO_MIN = 120_000L
     }
 
     private lateinit var prefs: Prefs
     private lateinit var switchFloat: SwitchCompat
     private lateinit var tvStatus: TextView
     private lateinit var tvPermission: TextView
-    private var tvLeft: TextView? = null
     private var lastVoice: VoiceResult? = null
     private var voicePlayer: MediaPlayer? = null
-    private var voiceBusy = false
-    private var timerRunning = false
     private var adView: AdView? = null
     private var bannerFails = 0
+    private var adsReady = false
     private val handler = Handler(Looper.getMainLooper())
 
     private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) savePhoto(uri)
-    }
-
-    private var adMiss = 0
-
-    private val preloadInter = Runnable {
-        if (timerRunning) InterstitialManager.arm(this)
-    }
-
-    private val adTick = object : Runnable {
-        override fun run() {
-            if (!timerRunning) return
-            if (!readyForAd()) {
-                handler.postDelayed(this, 5_000L)
-                return
-            }
-            if (!InterstitialManager.isReady()) {
-                adMiss++
-                InterstitialManager.preload(this@MainActivity)
-                if (adMiss >= 3) {
-                    adMiss = 0
-                    handler.postDelayed(this, TWO_MIN)
-                } else {
-                    handler.postDelayed(this, 30_000L)
-                }
-                return
-            }
-            adMiss = 0
-            Toast.makeText(this@MainActivity, "Ad starting...", Toast.LENGTH_SHORT).show()
-            handler.postDelayed({
-                if (timerRunning && readyForAd()) {
-                    val shown = InterstitialManager.showNow(this@MainActivity) {}
-                    handler.postDelayed(this, if (shown) TWO_MIN else 30_000L)
-                } else {
-                    handler.postDelayed(this, 5_000L)
-                }
-            }, 2000)
-        }
-    }
-
-    private val keepAlive = object : Runnable {
-        override fun run() {
-            if (!timerRunning) return
-            // no repeated ad requests
-        }
-    }
-
-    private fun readyForAd(): Boolean {
-        if (AdState.showing) return false
-        if (voiceBusy || voicePlayer != null || Speaker.isSpeaking()) return false
-        if (!hasWindowFocus()) return false
-        val ime = ViewCompat.getRootWindowInsets(window.decorView)
-            ?.isVisible(WindowInsetsCompat.Type.ime()) == true
-        return !ime
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -189,11 +132,17 @@ class MainActivity : AppCompatActivity() {
         setupVoicePickers()
         setupVoiceMessage()
         setupFlashCard()
-        setupNative()
         setupBanner()
+
+        MobileAds.initialize(this) {
+            runOnUiThread {
+                adsReady = true
+                AppOpenManager.showOnLaunch(this)
+            }
+        }
     }
 
-    // ---------------- ads ----------------
+    // ---------------- ads: small banner at the bottom ----------------
 
     private fun setupBanner() {
         val content = findViewById<ViewGroup>(android.R.id.content)
@@ -214,10 +163,10 @@ class MainActivity : AppCompatActivity() {
 
             override fun onAdFailedToLoad(error: LoadAdError) {
                 bannerFails++
-                if (bannerFails <= AdRetry.MAX_RETRIES) {
+                if (bannerFails <= 3) {
                     handler.postDelayed({
-                        if (timerRunning) av.loadAd(AdRequest.Builder().build())
-                    }, AdRetry.delayFor(bannerFails - 1))
+                        av.loadAd(AdRequest.Builder().build())
+                    }, 30_000L * bannerFails)
                 }
             }
         }
@@ -234,66 +183,11 @@ class MainActivity : AppCompatActivity() {
         adView = av
     }
 
-    private fun setupNative() {
-        val anchor = findViewById<View>(R.id.etMessage) ?: return
-        val card = anchor.parent as? View ?: return
-        val holder = card.parent as? ViewGroup ?: return
-        NativeAdHelper.attach(this, holder, holder.indexOfChild(card))
-    }
-
-    private fun updateVoiceLeft() {
-        tvLeft?.text = "Free voice messages left today: " + VoiceQuota.left(this)
-    }
-
-    private fun askForMoreVoices() {
-        AlertDialog.Builder(this)
-            .setTitle("Free voice messages used up")
-            .setMessage("Watch a short ad to get " + VoiceQuota.BONUS + " more voice messages today.")
-            .setPositiveButton("WATCH AD") { _, _ -> watchRewarded() }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun watchRewarded() {
-        val reward = {
-            VoiceQuota.addBonus(this)
-            updateVoiceLeft()
-            Toast.makeText(this, "You got " + VoiceQuota.BONUS + " more voice messages", Toast.LENGTH_LONG).show()
-        }
-        Toast.makeText(this, "Loading ad...", Toast.LENGTH_SHORT).show()
-        RewardedManager.loadAndShow(this, 8000L, onReward = reward, onFail = {
-            RewardedInterstitialManager.loadAndShow(this, 8000L, onReward = reward, onFail = {
-                VoiceQuota.addBonus(this, 1)
-                updateVoiceLeft()
-                Toast.makeText(this, "No ad available right now. Here is 1 extra voice message.", Toast.LENGTH_LONG).show()
-            })
-        })
-    }
-
     // ---------------- lifecycle ----------------
 
     override fun onStart() {
         super.onStart()
-        AdState.started()
-        AdKick.start(this)
-        if (AppOpenManager.skipNext) {
-            AppOpenManager.skipNext = false
-        } else {
-            AppOpenManager.showIfReady(this, lateOk = true)
-        }
-        adView?.let {
-            if (bannerFails >= 3) {
-                bannerFails = 0
-                it.loadAd(AdRequest.Builder().build())
-            }
-        }
-        timerRunning = true
-        handler.removeCallbacks(adTick)
-        handler.postDelayed(adTick, TWO_MIN)
-        handler.removeCallbacks(preloadInter)
-        handler.postDelayed(preloadInter, TWO_MIN - 20_000L)
-        handler.removeCallbacks(keepAlive)
-        handler.postDelayed(keepAlive, 30_000L)
+        if (adsReady) AppOpenManager.showOnLaunch(this)
     }
 
     override fun onResume() {
@@ -304,15 +198,6 @@ class MainActivity : AppCompatActivity() {
         if (switchFloat.isChecked != on) switchFloat.isChecked = on
         renderStatus(on)
         refreshFlashStatus()
-    }
-
-    override fun onStop() {
-        AdState.stopped()
-        handler.removeCallbacks(preloadInter)
-        handler.removeCallbacks(keepAlive)
-        timerRunning = false
-        handler.removeCallbacks(adTick)
-        super.onStop()
     }
 
     override fun onDestroy() {
@@ -493,28 +378,13 @@ class MainActivity : AppCompatActivity() {
         val row = findViewById<LinearLayout>(R.id.shareRow)
         val play = findViewById<TextView>(R.id.btnPlayVoice)
 
-        val parent = btn.parent as ViewGroup
-        val left = TextView(this)
-        left.textSize = 13f
-        left.setTextColor(ContextCompat.getColor(this, R.color.navy_text))
-        left.setPadding(0, dp(10), 0, 0)
-        parent.addView(left, parent.indexOfChild(btn) + 1)
-        tvLeft = left
-        updateVoiceLeft()
-
         btn.setOnClickListener {
             val text = msg.text.toString().trim()
             if (text.isEmpty()) {
                 Toast.makeText(this, "Type a message first", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            if (VoiceQuota.left(this) <= 0) {
-                askForMoreVoices()
-                return@setOnClickListener
-            }
             stopVoicePlayback()
-            voiceBusy = true
-            InterstitialManager.arm(this)
             btn.isEnabled = false
             btn.alpha = 0.5f
             row.visibility = View.GONE
@@ -523,18 +393,14 @@ class MainActivity : AppCompatActivity() {
             status.text = "Making voice, please wait..."
 
             VoiceMaker.make(this, text) { result ->
-                voiceBusy = false
                 btn.isEnabled = true
                 btn.alpha = 1f
                 if (result == null) {
                     status.text = "Could not make voice. Check internet and try again."
                     return@make
                 }
-                VoiceQuota.use(this)
-                updateVoiceLeft()
                 lastVoice = result
-                status.text = "Showing a short ad, then your voice is ready..."
-                InterstitialManager.showNow(this, 3000L) { revealVoice(result) }
+                revealVoice(result)
             }
         }
     }
