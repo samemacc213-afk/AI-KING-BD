@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">AI KING BD</string>
+    <string name="a11y_desc">Lets AI KING BD copy the text inside the box you place on the screen. It reads the screen only when you tap the pencil button.</string>
 </resources>

@@ -5,16 +5,19 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.BitmapFactory
 import android.graphics.Outline
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -37,6 +40,11 @@ class FloatingService : Service() {
     private var wm: WindowManager? = null
     private var button: ImageView? = null
     private var params: WindowManager.LayoutParams? = null
+    private var selView: ImageView? = null
+    private var selParams: WindowManager.LayoutParams? = null
+    private var box: SelectionBox? = null
+    private var btnSize = 0
+    private var gap = 0
     private val handler = Handler(Looper.getMainLooper())
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -92,16 +100,9 @@ class FloatingService : Service() {
         iv.setImageResource(R.drawable.ic_emoji_button)
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    private fun showButton() {
-        val manager = getSystemService(WINDOW_SERVICE) as WindowManager
-        wm = manager
-        val density = resources.displayMetrics.density
-        val size = (36 * density).toInt()
-        val prefs = Prefs(this)
-
-        val lp = WindowManager.LayoutParams(
-            size, size,
+    private fun overlayParams(x: Int, y: Int): WindowManager.LayoutParams {
+        return WindowManager.LayoutParams(
+            btnSize, btnSize,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -109,9 +110,20 @@ class FloatingService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = prefs.btnX
-            y = prefs.btnY
+            this.x = x
+            this.y = y
         }
+    }
+
+    private fun showButton() {
+        val manager = getSystemService(WINDOW_SERVICE) as WindowManager
+        wm = manager
+        val density = resources.displayMetrics.density
+        btnSize = (36 * density).toInt()
+        gap = (6 * density).toInt()
+        val prefs = Prefs(this)
+
+        val lp = overlayParams(prefs.btnX, prefs.btnY)
         params = lp
 
         val iv = ImageView(this).apply {
@@ -124,21 +136,59 @@ class FloatingService : Service() {
         }
         button = iv
         applyImage()
+        attachDrag(iv) { onTap() }
+        manager.addView(iv, lp)
 
+        val sp = overlayParams(lp.x, lp.y + btnSize + gap)
+        selParams = sp
+        val sv = ImageView(this).apply {
+            setImageResource(R.drawable.ic_select_button)
+            scaleType = ImageView.ScaleType.FIT_XY
+            contentDescription = "Select text on screen"
+        }
+        selView = sv
+        attachDrag(sv) { toggleBox() }
+        manager.addView(sv, sp)
+
+        moveBoth(lp.x, lp.y)
+    }
+
+    private fun moveBoth(x: Int, y: Int) {
+        val manager = wm ?: return
+        val m = params ?: return
+        val sw = resources.displayMetrics.widthPixels
+        val sh = resources.displayMetrics.heightPixels
+        val total = btnSize * 2 + gap
+        m.x = x.coerceIn(0, maxOf(0, sw - btnSize))
+        m.y = y.coerceIn(0, maxOf(0, sh - total))
+        button?.let { try { manager.updateViewLayout(it, m) } catch (_: Exception) {} }
+        val sp = selParams
+        if (sp != null) {
+            sp.x = m.x
+            sp.y = m.y + btnSize + gap
+            selView?.let { try { manager.updateViewLayout(it, sp) } catch (_: Exception) {} }
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun attachDrag(v: View, onTapAction: () -> Unit) {
         val slop = ViewConfiguration.get(this).scaledTouchSlop
-
-        iv.setOnTouchListener(object : View.OnTouchListener {
+        val prefs = Prefs(this)
+        v.setOnTouchListener(object : View.OnTouchListener {
             var startX = 0
             var startY = 0
             var downX = 0f
             var downY = 0f
             var moved = false
 
-            override fun onTouch(v: View, e: MotionEvent): Boolean {
+            override fun onTouch(view: View, e: MotionEvent): Boolean {
+                val m = params ?: return false
                 when (e.action) {
                     MotionEvent.ACTION_DOWN -> {
-                        startX = lp.x; startY = lp.y
-                        downX = e.rawX; downY = e.rawY
+                        startX = m.x
+                        startY = m.y
+                        downX = e.rawX
+                        downY = e.rawY
                         moved = false
                         return true
                     }
@@ -146,21 +196,15 @@ class FloatingService : Service() {
                         val dx = e.rawX - downX
                         val dy = e.rawY - downY
                         if (abs(dx) > slop || abs(dy) > slop) moved = true
-                        if (moved) {
-                            lp.x = (startX + dx).toInt()
-                                .coerceIn(0, resources.displayMetrics.widthPixels - size)
-                            lp.y = (startY + dy).toInt()
-                                .coerceIn(0, resources.displayMetrics.heightPixels - size)
-                            manager.updateViewLayout(iv, lp)
-                        }
+                        if (moved) moveBoth(startX + dx.toInt(), startY + dy.toInt())
                         return true
                     }
                     MotionEvent.ACTION_UP -> {
                         if (!moved) {
-                            onTap()
+                            onTapAction()
                         } else {
-                            prefs.btnX = lp.x
-                            prefs.btnY = lp.y
+                            prefs.btnX = m.x
+                            prefs.btnY = m.y
                         }
                         return true
                     }
@@ -168,9 +212,49 @@ class FloatingService : Service() {
                 return false
             }
         })
-
-        manager.addView(iv, lp)
     }
+
+    // ---------------- select box ----------------
+
+    private fun toggleBox() {
+        val manager = wm ?: return
+        val existing = box
+        if (existing != null && existing.isOpen) {
+            existing.close()
+            return
+        }
+        val b = SelectionBox(this, manager, { r -> copyFromScreen(r) }, { })
+        box = b
+        b.open()
+    }
+
+    private fun copyFromScreen(r: Rect) {
+        val svc = ScreenTextService.instance
+        if (svc == null) {
+            Toast.makeText(this, "Turn on AI KING BD in Accessibility settings first", Toast.LENGTH_LONG).show()
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (_: Exception) {
+            }
+            return
+        }
+        val text = try { svc.extract(r) } catch (e: Exception) { "" }
+        if (text.isBlank()) {
+            Toast.makeText(
+                this,
+                "No text found inside the box (text inside pictures cannot be read)",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+        val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("AI KING BD", text))
+        Toast.makeText(this, "Copied " + text.length + " characters", Toast.LENGTH_SHORT).show()
+    }
+
+    // ---------------- read copied text aloud ----------------
 
     private fun onTap() {
         if (Speaker.isSpeaking()) {
@@ -224,8 +308,12 @@ class FloatingService : Service() {
     }
 
     override fun onDestroy() {
-        button?.let { wm?.removeView(it) }
+        box?.close()
+        box = null
+        button?.let { try { wm?.removeView(it) } catch (_: Exception) {} }
+        selView?.let { try { wm?.removeView(it) } catch (_: Exception) {} }
         button = null
+        selView = null
         super.onDestroy()
     }
 }
