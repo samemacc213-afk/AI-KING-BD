@@ -251,7 +251,7 @@ class FloatingService : Service() {
         }
         val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText("AI KING BD", text))
-        Toast.makeText(this, "Copied " + text.length + " characters", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Copied " + text.length + " chars from " + svc.lastSource + ": " + text.take(40), Toast.LENGTH_LONG).show()
     }
 
     // ---------------- read copied text aloud ----------------

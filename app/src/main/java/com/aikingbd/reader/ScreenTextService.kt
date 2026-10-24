@@ -15,6 +15,8 @@ class ScreenTextService : AccessibilityService() {
         @Volatile var instance: ScreenTextService? = null
     }
 
+    @Volatile var lastSource: String = ""
+
     private class Item(val text: String, val top: Int, val left: Int)
 
     override fun onServiceConnected() {
@@ -36,24 +38,36 @@ class ScreenTextService : AccessibilityService() {
         super.onDestroy()
     }
 
+    private fun appName(pkg: String): String {
+        return try {
+            packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+        } catch (e: Exception) {
+            pkg
+        }
+    }
+
     fun extract(box: Rect): String {
+        lastSource = ""
         val items = mutableListOf<Item>()
-        val roots = mutableListOf<AccessibilityNodeInfo>()
-        try {
-            for (win in windows) {
-                if (win.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
-                val r = win.root ?: continue
-                roots.add(r)
+        var root: AccessibilityNodeInfo? = try { rootInActiveWindow } catch (e: Exception) { null }
+        if (root == null || root.packageName?.toString() == packageName) {
+            root = null
+            try {
+                val wins = windows
+                    .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+                    .sortedByDescending { if (it.isActive) 2 else if (it.isFocused) 1 else 0 }
+                for (win in wins) {
+                    val r = win.root ?: continue
+                    if (r.packageName?.toString() == packageName) continue
+                    root = r
+                    break
+                }
+            } catch (_: Exception) {
             }
-        } catch (_: Exception) {
         }
-        if (roots.isEmpty()) {
-            rootInActiveWindow?.let { roots.add(it) }
-        }
-        for (r in roots) {
-            if (r.packageName?.toString() == packageName) continue
-            walk(r, box, items, 0)
-        }
+        val rt = root ?: return ""
+        lastSource = appName(rt.packageName?.toString() ?: "")
+        walk(rt, box, items, 0)
 
         items.sortWith(compareBy<Item>({ it.top / 12 }, { it.left }))
         val seen = mutableListOf<String>()
