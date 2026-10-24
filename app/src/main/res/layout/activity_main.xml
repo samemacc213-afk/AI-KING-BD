@@ -876,5 +876,158 @@
                     android:textSize="14sp" />
             </LinearLayout>
         </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical"
+            android:padding="18dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_badge"
+                    android:fontFamily="serif"
+                    android:gravity="center"
+                    android:text="10"
+                    android:textColor="@color/navy_text"
+                    android:textSize="18sp" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="serif"
+                        android:text="TRANSLATE"
+                        android:textColor="@color/navy_text"
+                        android:textSize="17sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="English to Bangla • Copy • Listen"
+                        android:textColor="@color/gold_dark"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <EditText
+                android:id="@+id/etTrIn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_input"
+                android:gravity="top|start"
+                android:hint="Type or paste English text"
+                android:inputType="textMultiLine"
+                android:minHeight="100dp"
+                android:padding="14dp"
+                android:textColor="@color/navy_text"
+                android:textColorHint="#9AA0AB"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/btnTranslate"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_gold_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="serif"
+                android:gravity="center"
+                android:text="TRANSLATE TO BANGLA"
+                android:textColor="@color/navy_text"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/tvTrStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text=""
+                android:textColor="@color/gold_dark"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tvTrOut"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_input"
+                android:padding="14dp"
+                android:text=""
+                android:textColor="@color/navy_text"
+                android:textIsSelectable="true"
+                android:textSize="16sp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/btnTrCopy"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_input"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:fontFamily="serif"
+                    android:gravity="center"
+                    android:text="COPY"
+                    android:textColor="@color/navy_text"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/btnTrListen"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_input"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:fontFamily="serif"
+                    android:gravity="center"
+                    android:text="▶ LISTEN"
+                    android:textColor="@color/navy_text"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/btnTrToVoice"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_input"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:fontFamily="serif"
+                    android:gravity="center"
+                    android:text="TO VOICE"
+                    android:textColor="@color/navy_text"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

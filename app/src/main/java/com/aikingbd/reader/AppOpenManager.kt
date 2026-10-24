@@ -65,6 +65,7 @@ object AppOpenManager {
             object : AppOpenAd.AppOpenAdLoadCallback() {
                 override fun onAdLoaded(ad: AppOpenAd) {
                     loading = false
+                    AdLog.set(false, "loaded")
                     cached = ad
                     cachedAt = System.currentTimeMillis()
                     val w = pending
@@ -79,6 +80,7 @@ object AppOpenManager {
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     loading = false
                     pending = null
+                    AdLog.set(false, "failed " + error.code + ": " + error.message)
                 }
             }
         )

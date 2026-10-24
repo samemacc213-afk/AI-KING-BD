@@ -134,11 +134,13 @@ class MainActivity : AppCompatActivity() {
         setupVoicePickers()
         setupVoiceMessage()
         setupFlashCard()
+        setupTranslate()
         setupBanner()
 
         MobileAds.initialize(this) {
             runOnUiThread {
                 adsReady = true
+                requestBanner()
                 AppOpenManager.showOnLaunch(this)
             }
         }
@@ -155,6 +157,14 @@ class MainActivity : AppCompatActivity() {
         box.setBackgroundColor(ContextCompat.getColor(this, R.color.navy))
         box.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
+        val adLog = TextView(this)
+        adLog.textSize = 10f
+        adLog.setTextColor(0xFF9AA0AB.toInt())
+        adLog.gravity = Gravity.CENTER
+        adLog.text = AdLog.line()
+        box.addView(adLog, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        AdLog.onChange = { adLog.text = AdLog.line() }
+
         val av = AdView(this)
         av.setAdSize(AdSize.BANNER)
         av.adUnitId = AdIds.banner()
@@ -162,11 +172,13 @@ class MainActivity : AppCompatActivity() {
             override fun onAdLoaded() {
                 bannerLoaded = true
                 bannerFails = 0
+                AdLog.set(true, "loaded")
             }
 
             override fun onAdFailedToLoad(error: LoadAdError) {
                 bannerLoaded = false
                 bannerFails++
+                AdLog.set(true, "failed " + error.code + ": " + error.message)
                 val wait = minOf(30_000L * bannerFails, 300_000L)
                 handler.postDelayed({ requestBanner() }, wait)
             }
@@ -181,7 +193,6 @@ class MainActivity : AppCompatActivity() {
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
         adView = av
-        requestBanner()
     }
 
     private fun requestBanner() {
@@ -197,7 +208,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         if (adsReady) AppOpenManager.showOnLaunch(this)
-        if (!bannerLoaded) requestBanner()
+        if (adsReady && !bannerLoaded) requestBanner()
     }
 
     override fun onStop() {
@@ -563,6 +574,69 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------------- sliders ----------------
+
+    private fun setupTranslate() {
+        val input = findViewById<EditText>(R.id.etTrIn)
+        val out = findViewById<TextView>(R.id.tvTrOut)
+        val status = findViewById<TextView>(R.id.tvTrStatus)
+        val go = findViewById<TextView>(R.id.btnTranslate)
+
+        go.setOnClickListener {
+            val text = input.text.toString().trim()
+            if (text.isEmpty()) {
+                Toast.makeText(this, "Type or paste English text first", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            go.isEnabled = false
+            go.alpha = 0.5f
+            status.visibility = View.VISIBLE
+            status.text = "Translating..."
+            Thread {
+                val bn = Translator.toBangla(text)
+                runOnUiThread {
+                    go.isEnabled = true
+                    go.alpha = 1f
+                    if (bn == null) {
+                        status.text = "Could not translate: " + Translator.lastError.ifEmpty { "check internet" }
+                    } else {
+                        status.visibility = View.GONE
+                        out.text = bn
+                        out.visibility = View.VISIBLE
+                    }
+                }
+            }.start()
+        }
+
+        findViewById<TextView>(R.id.btnTrCopy).setOnClickListener {
+            val t = out.text.toString()
+            if (t.isBlank()) {
+                Toast.makeText(this, "Translate something first", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("bangla", t))
+            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show()
+        }
+
+        findViewById<TextView>(R.id.btnTrListen).setOnClickListener {
+            val t = out.text.toString()
+            if (t.isBlank()) {
+                Toast.makeText(this, "Translate something first", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (Speaker.isSpeaking()) Speaker.stop() else Speaker.speak(this, t)
+        }
+
+        findViewById<TextView>(R.id.btnTrToVoice).setOnClickListener {
+            val t = out.text.toString()
+            if (t.isBlank()) {
+                Toast.makeText(this, "Translate something first", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            findViewById<EditText>(R.id.etMessage).setText(t)
+            Toast.makeText(this, "Moved to Voice Message (card 8)", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     private fun setupSlider(seekId: Int, labelId: Int, value: Float, onChange: (Float) -> Unit) {
         val seek = findViewById<SeekBar>(seekId)
