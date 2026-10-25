@@ -240,18 +240,24 @@ class FloatingService : Service() {
             }
             return
         }
-        val text = try { svc.extract(r) } catch (e: Exception) { "" }
-        if (text.isBlank()) {
-            Toast.makeText(
-                this,
-                "No text found inside the box (text inside pictures cannot be read)",
-                Toast.LENGTH_LONG
-            ).show()
-            return
-        }
-        val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-        cm.setPrimaryClip(ClipData.newPlainText("AI KING BD", text))
-        Toast.makeText(this, "Copied " + text.length + " chars from " + svc.lastSource + ": " + text.take(40), Toast.LENGTH_LONG).show()
+        val b = box
+        b?.setHidden(true)
+        handler.postDelayed({
+            svc.extractBest(r) { text, method ->
+                b?.setHidden(false)
+                if (text.isBlank()) {
+                    Toast.makeText(this, "No text found inside the box", Toast.LENGTH_LONG).show()
+                } else {
+                    val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("AI KING BD", text))
+                    Toast.makeText(
+                        this,
+                        "Copied " + text.length + " chars (" + method + ") from " + svc.lastSource + ": " + text.take(40),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }, 170)
     }
 
     // ---------------- read copied text aloud ----------------

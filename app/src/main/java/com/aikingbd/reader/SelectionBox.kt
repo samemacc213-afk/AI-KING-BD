@@ -286,6 +286,10 @@ class SelectionBox(
         onCopy(r)
     }
 
+    fun setHidden(hidden: Boolean) {
+        view?.visibility = if (hidden) View.INVISIBLE else View.VISIBLE
+    }
+
     fun close() {
         if (!isOpen) return
         isOpen = false

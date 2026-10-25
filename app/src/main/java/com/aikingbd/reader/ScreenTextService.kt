@@ -2,12 +2,25 @@ package com.aikingbd.reader
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
 class ScreenTextService : AccessibilityService() {
 
@@ -18,6 +31,8 @@ class ScreenTextService : AccessibilityService() {
     @Volatile var lastSource: String = ""
 
     private class Item(val text: String, val top: Int, val left: Int)
+
+    private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -45,6 +60,109 @@ class ScreenTextService : AccessibilityService() {
             pkg
         }
     }
+
+    // ---------- best available text for the box: Bangla from the app text, English/code by OCR ----------
+
+    fun extractBest(box: Rect, done: (String, String) -> Unit) {
+        val acc = try { extract(box) } catch (e: Exception) { "" }
+
+        var answered = false
+        val finish: (String, String) -> Unit = { t, m ->
+            if (!answered) {
+                answered = true
+                done(t, m)
+            }
+        }
+
+        val hasBangla = acc.any { it in '\u0980'..'\u09FF' }
+        if (hasBangla || Build.VERSION.SDK_INT < 30) {
+            finish(acc, "text")
+            return
+        }
+
+        Handler(Looper.getMainLooper()).postDelayed({ finish(acc, "text") }, 8000)
+
+        screenshotText(box) { ocr ->
+            if (ocr.isNotBlank()) finish(ocr, "OCR") else finish(acc, "text")
+        }
+    }
+
+    private fun screenshotText(box: Rect, cb: (String) -> Unit) {
+        try {
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                mainExecutor,
+                object : AccessibilityService.TakeScreenshotCallback {
+                    override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
+                        try {
+                            val hb = result.hardwareBuffer
+                            val hw = Bitmap.wrapHardwareBuffer(hb, result.colorSpace)
+                            val soft = hw?.copy(Bitmap.Config.ARGB_8888, false)
+                            hw?.recycle()
+                            hb.close()
+                            if (soft == null) {
+                                cb("")
+                                return
+                            }
+                            val l = box.left.coerceIn(0, soft.width - 1)
+                            val t = box.top.coerceIn(0, soft.height - 1)
+                            val r = box.right.coerceIn(l + 1, soft.width)
+                            val b = box.bottom.coerceIn(t + 1, soft.height)
+                            var crop = Bitmap.createBitmap(soft, l, t, r - l, b - t)
+                            if (crop.width < 1000) {
+                                crop = Bitmap.createScaledBitmap(crop, crop.width * 2, crop.height * 2, true)
+                            }
+                            crop = maybeInvert(crop)
+                            recognizer.process(InputImage.fromBitmap(crop, 0))
+                                .addOnSuccessListener { text -> cb(text.text.trim()) }
+                                .addOnFailureListener { cb("") }
+                        } catch (e: Exception) {
+                            cb("")
+                        }
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        cb("")
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            cb("")
+        }
+    }
+
+    // dark backgrounds are easier to read after inverting the colors
+    private fun maybeInvert(bmp: Bitmap): Bitmap {
+        return try {
+            val small = Bitmap.createScaledBitmap(bmp, 16, 16, true)
+            var sum = 0L
+            for (y in 0 until 16) {
+                for (x in 0 until 16) {
+                    val c = small.getPixel(x, y)
+                    sum += (Color.red(c) + Color.green(c) + Color.blue(c)) / 3
+                }
+            }
+            if (sum / 256 > 110) return bmp
+            val out = Bitmap.createBitmap(bmp.width, bmp.height, Bitmap.Config.ARGB_8888)
+            val p = Paint()
+            p.colorFilter = ColorMatrixColorFilter(
+                ColorMatrix(
+                    floatArrayOf(
+                        -1f, 0f, 0f, 0f, 255f,
+                        0f, -1f, 0f, 0f, 255f,
+                        0f, 0f, -1f, 0f, 255f,
+                        0f, 0f, 0f, 1f, 0f
+                    )
+                )
+            )
+            Canvas(out).drawBitmap(bmp, 0f, 0f, p)
+            out
+        } catch (e: Exception) {
+            bmp
+        }
+    }
+
+    // ---------- app text (works well for Telegram, Facebook, browsers' normal pages) ----------
 
     fun extract(box: Rect): String {
         lastSource = ""
@@ -112,7 +230,6 @@ class ScreenTextService : AccessibilityService() {
         return if (frac >= 0.4f) text else null
     }
 
-    // picks only the characters that lie inside the box; null when the app does not report character positions
     private fun partial(node: AccessibilityNodeInfo, text: String, b: Rect, box: Rect): String? {
         if (text.length > 5000) return null
         try {
