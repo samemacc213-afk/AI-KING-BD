@@ -131,6 +131,7 @@ class MainActivity : AppCompatActivity() {
 
         setupLinks()
         setupEleven()
+        setupElevenExtras()
         setupVoicePickers()
         setupVoiceMessage()
         setupFlashCard()
@@ -351,6 +352,72 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------------- voice pickers ----------------
+
+    private fun setupElevenExtras() {
+        findViewById<TextView>(R.id.btnElTest).setOnClickListener {
+            val key = prefs.elevenKey.trim()
+            if (key.isBlank()) {
+                Toast.makeText(this, "Paste your ElevenLabs key first", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            Toast.makeText(this, "Testing key...", Toast.LENGTH_SHORT).show()
+            Thread {
+                val (ok, msg) = ElevenVoice.testKey(key)
+                runOnUiThread {
+                    AlertDialog.Builder(this)
+                        .setTitle(if (ok) "Key works" else "Key failed")
+                        .setMessage(msg)
+                        .setPositiveButton("OK", null)
+                        .show()
+                }
+            }.start()
+        }
+
+        findViewById<TextView>(R.id.btnElBrowse).setOnClickListener {
+            val key = prefs.elevenKey.trim()
+            if (key.isBlank()) {
+                Toast.makeText(this, "Paste your ElevenLabs key first", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            Toast.makeText(this, "Searching the voice library...", Toast.LENGTH_SHORT).show()
+            Thread {
+                val list = ElevenVoice.searchLibrary(key)
+                runOnUiThread {
+                    if (list == null || list.isEmpty()) {
+                        Toast.makeText(this, ElevenVoice.lastError.ifEmpty { "No voices found" }, Toast.LENGTH_LONG).show()
+                        return@runOnUiThread
+                    }
+                    val names = list.map { it.name }.toTypedArray()
+                    AlertDialog.Builder(this)
+                        .setTitle("Voice library \u2022 tap to add")
+                        .setItems(names) { _, which ->
+                            val v = list[which]
+                            Toast.makeText(this, "Adding " + v.name + "...", Toast.LENGTH_SHORT).show()
+                            Thread {
+                                val ok = ElevenVoice.addVoice(key, v.ownerId, v.voiceId, v.name)
+                                runOnUiThread {
+                                    if (ok) {
+                                        Toast.makeText(
+                                            this,
+                                            "Added. Tap the ElevenLabs voice row above to select it.",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    } else {
+                                        Toast.makeText(
+                                            this,
+                                            ElevenVoice.lastError.ifEmpty { "Could not add this voice" },
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                }
+                            }.start()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
+            }.start()
+        }
+    }
 
     private fun setupVoicePickers() {
         val floatBtn = findViewById<TextView>(R.id.btnFloatVoice)
