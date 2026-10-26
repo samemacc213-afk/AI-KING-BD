@@ -72,4 +72,12 @@ class Prefs(ctx: Context) {
     var voiceBonus: Int
         get() = sp.getInt("voiceBonus", 0)
         set(v) = sp.edit().putInt("voiceBonus", v).apply()
+
+    var pinHash: String
+        get() = sp.getString("pinHash", "") ?: ""
+        set(v) = sp.edit().putString("pinHash", v).apply()
+
+    var pinLocked: Boolean
+        get() = sp.getBoolean("pinLocked", false)
+        set(v) = sp.edit().putBoolean("pinLocked", v).apply()
 }

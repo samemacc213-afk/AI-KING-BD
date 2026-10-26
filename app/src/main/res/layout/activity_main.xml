@@ -32,6 +32,7 @@
                 android:layout_marginStart="14dp"
                 android:fontFamily="serif"
                 android:letterSpacing="0.08"
+                android:id="@+id/tvTitle"
                 android:text="AI KING BD"
                 android:textColor="@color/white"
                 android:textSize="30sp"

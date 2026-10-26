@@ -66,6 +66,8 @@ class MainActivity : AppCompatActivity() {
         if (uri != null) savePhoto(uri)
     }
 
+    private lateinit var pinLock: PinLock
+
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -133,6 +135,8 @@ class MainActivity : AppCompatActivity() {
         setupEleven()
         setupElevenExtras()
         setupVoicePickers()
+        pinLock = PinLock(this, prefs)
+        pinLock.attachTitleTap(findViewById(R.id.tvTitle))
         setupVoiceMessage()
         setupFlashCard()
         setupTranslate()
@@ -225,6 +229,7 @@ class MainActivity : AppCompatActivity() {
         if (switchFloat.isChecked != on) switchFloat.isChecked = on
         renderStatus(on)
         refreshFlashStatus()
+        if (::pinLock.isInitialized) pinLock.showIfLocked()
     }
 
     override fun onDestroy() {
