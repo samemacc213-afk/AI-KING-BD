@@ -1,83 +1,21 @@
 package com.aikingbd.reader
-
 import android.content.Context
-
 class Prefs(ctx: Context) {
     private val sp = ctx.applicationContext.getSharedPreferences("aikb", Context.MODE_PRIVATE)
-
-    var pitch: Float
-        get() = sp.getFloat("pitch", 1.0f)
-        set(v) = sp.edit().putFloat("pitch", v).apply()
-
-    var speed: Float
-        get() = sp.getFloat("speed", 1.0f)
-        set(v) = sp.edit().putFloat("speed", v).apply()
-
-    var btnX: Int
-        get() = sp.getInt("btnX", 0)
-        set(v) = sp.edit().putInt("btnX", v).apply()
-
-    var btnY: Int
-        get() = sp.getInt("btnY", 120)
-        set(v) = sp.edit().putInt("btnY", v).apply()
-
-    var enabled: Boolean
-        get() = sp.getBoolean("enabled", false)
-        set(v) = sp.edit().putBoolean("enabled", v).apply()
-
-    var hasPhoto: Boolean
-        get() = sp.getBoolean("hasPhoto", false)
-        set(v) = sp.edit().putBoolean("hasPhoto", v).apply()
-
-    var voiceId: String
-        get() = sp.getString("voiceId", "") ?: ""
-        set(v) = sp.edit().putString("voiceId", v).apply()
-
-    var msgVoiceId: String
-        get() = sp.getString("msgVoiceId", "") ?: ""
-        set(v) = sp.edit().putString("msgVoiceId", v).apply()
-
-    var apiKey: String
-        get() = sp.getString("apiKey", "") ?: ""
-        set(v) = sp.edit().putString("apiKey", v).apply()
-
-    var sarvamKey: String
-        get() = sp.getString("sarvamKey", "") ?: ""
-        set(v) = sp.edit().putString("sarvamKey", v).apply()
-
-    var elevenKey: String
-        get() = sp.getString("elevenKey", "") ?: ""
-        set(v) = sp.edit().putString("elevenKey", v).apply()
-
-    var elVoiceId: String
-        get() = sp.getString("elVoiceId", "") ?: ""
-        set(v) = sp.edit().putString("elVoiceId", v).apply()
-
-    var elVoiceName: String
-        get() = sp.getString("elVoiceName", "") ?: ""
-        set(v) = sp.edit().putString("elVoiceName", v).apply()
-
-    var flashOn: Boolean
-        get() = sp.getBoolean("flashOn", false)
-        set(v) = sp.edit().putBoolean("flashOn", v).apply()
-
-    var voiceDay: String
-        get() = sp.getString("voiceDay", "") ?: ""
-        set(v) = sp.edit().putString("voiceDay", v).apply()
-
-    var voiceUsed: Int
-        get() = sp.getInt("voiceUsed", 0)
-        set(v) = sp.edit().putInt("voiceUsed", v).apply()
-
-    var voiceBonus: Int
-        get() = sp.getInt("voiceBonus", 0)
-        set(v) = sp.edit().putInt("voiceBonus", v).apply()
-
-    var pinHash: String
-        get() = sp.getString("pinHash", "") ?: ""
-        set(v) = sp.edit().putString("pinHash", v).apply()
-
-    var pinLocked: Boolean
-        get() = sp.getBoolean("pinLocked", false)
-        set(v) = sp.edit().putBoolean("pinLocked", v).apply()
+    var pitch: Float get() = sp.getFloat("pitch", 1.0f); set(v) = sp.edit().putFloat("pitch", v).apply()
+    var speed: Float get() = sp.getFloat("speed", 1.0f); set(v) = sp.edit().putFloat("speed", v).apply()
+    var btnX: Int get() = sp.getInt("btnX", 0); set(v) = sp.edit().putInt("btnX", v).apply()
+    var btnY: Int get() = sp.getInt("btnY", 120); set(v) = sp.edit().putInt("btnY", v).apply()
+    var enabled: Boolean get() = sp.getBoolean("enabled", false); set(v) = sp.edit().putBoolean("enabled", v).apply()
+    var hasPhoto: Boolean get() = sp.getBoolean("hasPhoto", false); set(v) = sp.edit().putBoolean("hasPhoto", v).apply()
+    var voiceId: String get() = sp.getString("voiceId","")?:""; set(v) = sp.edit().putString("voiceId", v).apply()
+    var msgVoiceId: String get() = sp.getString("msgVoiceId","")?:""; set(v) = sp.edit().putString("msgVoiceId", v).apply()
+    var msgMaleVoiceId: String get() = sp.getString("msgMaleVoiceId","")?:""; set(v) = sp.edit().putString("msgMaleVoiceId", v).apply()
+    var useMaleVoice: Boolean get() = sp.getBoolean("useMaleVoice", false); set(v) = sp.edit().putBoolean("useMaleVoice", v).apply()
+    var apiKey: String get() = sp.getString("apiKey","")?:""; set(v) = sp.edit().putString("apiKey", v).apply()
+    var sarvamKey: String get() = sp.getString("sarvamKey","")?:""; set(v) = sp.edit().putString("sarvamKey", v).apply()
+    var elevenKey: String get() = sp.getString("elevenKey","")?:""; set(v) = sp.edit().putString("elevenKey", v).apply()
+    var elVoiceId: String get() = sp.getString("elVoiceId","")?:""; set(v) = sp.edit().putString("elVoiceId", v).apply()
+    var elVoiceName: String get() = sp.getString("elVoiceName","")?:""; set(v) = sp.edit().putString("elVoiceName", v).apply()
+    var flashOn: Boolean get() = sp.getBoolean("flashOn", false); set(v) = sp.edit().putBoolean("flashOn", v).apply()
 }

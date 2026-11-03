@@ -629,6 +629,46 @@
                 android:textColor="@color/navy_text"
                 android:textSize="16sp" />
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="serif"
+                    android:text="Use male voice"
+                    android:textColor="@color/navy_text"
+                    android:textSize="14sp" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchMaleVoice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:thumbTint="@color/gold"
+                    app:trackTint="@color/gold_light" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/btnMsgVoiceMale"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_input"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="serif"
+                android:gravity="center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:text="Male voice: tap to choose  ▼"
+                android:textColor="@color/navy_text"
+                android:textSize="15sp" />
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -755,6 +795,20 @@
                 android:textSize="15sp" />
 
             <TextView
+                android:id="@+id/btnClearMsg"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_input"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="serif"
+                android:gravity="center"
+                android:text="CLEAR TEXT"
+                android:textColor="@color/navy_text"
+                android:textSize="13sp" />
+
+            <TextView
                 android:id="@+id/btnCreateVoice"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
@@ -781,6 +835,20 @@
                 android:text="▶ PLAY VOICE"
                 android:textColor="@color/navy_text"
                 android:textSize="16sp"
+                android:visibility="gone" />
+            <TextView
+                android:id="@+id/btnDownloadVoice"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_input"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="serif"
+                android:gravity="center"
+                android:text="⬇ DOWNLOAD VOICE"
+                android:textColor="@color/navy_text"
+                android:textSize="15sp"
                 android:visibility="gone" />
 
             <TextView
@@ -977,6 +1045,20 @@
                 android:textColor="@color/navy_text"
                 android:textColorHint="#9AA0AB"
                 android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/btnClearTr"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_input"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="serif"
+                android:gravity="center"
+                android:text="CLEAR TEXT"
+                android:textColor="@color/navy_text"
+                android:textSize="13sp" />
 
             <TextView
                 android:id="@+id/btnTranslate"
