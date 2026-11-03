@@ -31,7 +31,7 @@ class PinLock(private val act: AppCompatActivity, private val prefs: Prefs) {
     private var checking = false
     private var lastGood = 0L
 
-    // এখন আর ২০ বার ট্যাপ লাগে না
+    // 20-tap is no longer used
     @Suppress("UNUSED_PARAMETER")
     fun attachTitleTap(title: TextView) {
     }
@@ -42,7 +42,7 @@ class PinLock(private val act: AppCompatActivity, private val prefs: Prefs) {
         val okHash = gate().getString("ok_hash", "") ?: ""
         if (okHash.isEmpty()) {
             lockdown()
-            showDialog("অ্যাপ খুলতে পাসওয়ার্ড দিন")
+            showDialog("Enter password to open the app")
             return
         }
         val now = System.currentTimeMillis()
@@ -64,18 +64,18 @@ class PinLock(private val act: AppCompatActivity, private val prefs: Prefs) {
         val now = System.currentTimeMillis()
         when (r) {
             is Fetch.Fail -> {
-                if (now - okTime > graceMs) showDialog("ইন্টারনেট চালু করে পাসওয়ার্ড দিন")
+                if (now - okTime > graceMs) showDialog("Turn on internet and enter password")
             }
             is Fetch.Ok -> {
                 if (r.pw.isEmpty()) {
                     lockdown()
-                    showDialog("অ্যাপ এখন লক করা আছে। নতুন পাসওয়ার্ডের জন্য অপেক্ষা করুন")
+                    showDialog("App is locked. Please wait for a new password")
                 } else if (sha(r.pw) == okHash) {
                     sp.edit().putLong("ok_time", now).apply()
                     lastGood = now
                 } else {
                     lockdown()
-                    showDialog("পাসওয়ার্ড বদলানো হয়েছে। নতুন পাসওয়ার্ড দিন")
+                    showDialog("Password was changed. Enter the new password")
                 }
             }
         }
@@ -84,7 +84,7 @@ class PinLock(private val act: AppCompatActivity, private val prefs: Prefs) {
     private fun showDialog(msg: String) {
         if (dialog?.isShowing == true) return
         val f = EditText(act).apply {
-            hint = "পাসওয়ার্ড"
+            hint = "Password"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             setSingleLine(true)
         }
@@ -93,8 +93,8 @@ class PinLock(private val act: AppCompatActivity, private val prefs: Prefs) {
             .setMessage(msg)
             .setView(box(f))
             .setCancelable(false)
-            .setPositiveButton("ঢুকুন", null)
-            .setNegativeButton("বন্ধ করুন", null)
+            .setPositiveButton("Open", null)
+            .setNegativeButton("Close", null)
             .create()
         d.setCanceledOnTouchOutside(false)
         d.show()
@@ -103,7 +103,7 @@ class PinLock(private val act: AppCompatActivity, private val prefs: Prefs) {
         ok.setOnClickListener {
             val typed = f.text.toString().trim()
             if (typed.isEmpty()) {
-                toast("পাসওয়ার্ড লিখুন")
+                toast("Enter password")
                 return@setOnClickListener
             }
             ok.isEnabled = false
@@ -114,7 +114,7 @@ class PinLock(private val act: AppCompatActivity, private val prefs: Prefs) {
                     ok.isEnabled = true
                     if (r is Fetch.Ok) {
                         if (r.pw.isEmpty()) {
-                            toast("এখন অ্যাপ লক করা আছে। নতুন পাসওয়ার্ডের জন্য অপেক্ষা করুন")
+                            toast("App is locked. Please wait for a new password")
                         } else if (typed == r.pw) {
                             val now = System.currentTimeMillis()
                             gate().edit().putString("ok_hash", sha(r.pw)).putLong("ok_time", now).apply()
@@ -123,10 +123,10 @@ class PinLock(private val act: AppCompatActivity, private val prefs: Prefs) {
                             act.recreate()
                         } else {
                             f.setText("")
-                            toast("ভুল পাসওয়ার্ড")
+                            toast("Wrong password")
                         }
                     } else {
-                        toast("ইন্টারনেট চালু করে আবার চেষ্টা করুন")
+                        toast("Turn on internet and try again")
                     }
                 }
             }.start()
