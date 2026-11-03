@@ -18,4 +18,10 @@ class Prefs(ctx: Context) {
     var elVoiceId: String get() = sp.getString("elVoiceId","")?:""; set(v) = sp.edit().putString("elVoiceId", v).apply()
     var elVoiceName: String get() = sp.getString("elVoiceName","")?:""; set(v) = sp.edit().putString("elVoiceName", v).apply()
     var flashOn: Boolean get() = sp.getBoolean("flashOn", false); set(v) = sp.edit().putBoolean("flashOn", v).apply()
+    var pinHash: String
+        get() = sp.getString("pinHash", "") ?: ""
+        set(v) = sp.edit().putString("pinHash", v).apply()
+    var pinLocked: Boolean
+        get() = sp.getBoolean("pinLocked", false)
+        set(v) = sp.edit().putBoolean("pinLocked", v).apply()
 }
