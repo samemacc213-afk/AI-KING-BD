@@ -18,11 +18,11 @@ object Voices {
     )
     fun findMsg(id: String) = msgList.firstOrNull { it.id == id } ?: msgList[0]
     val maleMsgList = listOf(
-        VoiceOption("abhilash","Voice 1 \u2022 Abhilash"), VoiceOption("karun","Voice 2 \u2022 Karun"),
-        VoiceOption("hitesh","Voice 3 \u2022 Hitesh"), VoiceOption("arvind","Voice 4 \u2022 Arvind"),
-        VoiceOption("amol","Voice 5 \u2022 Amol"), VoiceOption("arjun","Voice 6 \u2022 Arjun"),
-        VoiceOption("ravi","Voice 7 \u2022 Ravi"), VoiceOption("aditya","Voice 8 \u2022 Aditya"),
-        VoiceOption("vikram","Voice 9 \u2022 Vikram"), VoiceOption("rahul","Voice 10 \u2022 Rahul")
+        VoiceOption("rehan","Voice 1 \u2022 Rehan"), VoiceOption("shubh","Voice 2 \u2022 Shubh"),
+        VoiceOption("ratan","Voice 3 \u2022 Ratan"), VoiceOption("ashutosh","Voice 4 \u2022 Ashutosh"),
+        VoiceOption("rahul","Voice 5 \u2022 Rahul"), VoiceOption("amit","Voice 6 \u2022 Amit"),
+        VoiceOption("aditya","Voice 7 \u2022 Aditya"), VoiceOption("mani","Voice 8 \u2022 Mani"),
+        VoiceOption("sunny","Voice 9 \u2022 Sunny"), VoiceOption("anand","Voice 10 \u2022 Anand")
     )
     fun findMsgMale(id: String) = maleMsgList.firstOrNull { it.id == id } ?: maleMsgList[0]
 }

@@ -91,6 +91,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 stopService(Intent(this, FloatingService::class.java))
                 prefs.enabled = false
+                AppOpenManager.showOnLaunch(this)
                 renderStatus(false)
             }
         }

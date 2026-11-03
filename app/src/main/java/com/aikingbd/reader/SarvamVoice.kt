@@ -8,14 +8,17 @@ import java.net.URL
 object SarvamVoice {
     @Volatile var lastError: String = ""
 
+    private val VALID_V3 = setOf("shubh","aditya","rahul","rohan","amit","dev","ratan","varun","manan","sumit","kabir","aayan","ashutosh","advait","anand","tarun","sunny","mani","gokul","vijay","mohit","rehan","soham","ritu","priya","neha","pooja","simran","kavya","ishita","shreya","roopa","tanya","shruti","suhani","kavitha","rupali")
+
     fun synth(text: String, speaker: String, key: String): ByteArray? {
         lastError = ""
+        val safeSpeaker = speaker.trim().lowercase().let { if (it in VALID_V3) it else "shubh" }
         for (langField in listOf("language_code", "target_language_code")) {
             try {
                 val body = JSONObject()
                     .put("text", text)
                     .put(langField, "bn-IN")
-                    .put("speaker", speaker)
+                    .put("speaker", safeSpeaker)
                     .put("model", "bulbul:v3")
 
                 val c = URL("https://api.sarvam.ai/text-to-speech").openConnection() as HttpURLConnection
