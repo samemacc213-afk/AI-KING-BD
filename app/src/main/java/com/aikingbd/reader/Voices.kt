@@ -6,7 +6,7 @@ object Voices {
         VoiceOption("Leda","Voice 3 \u2022 Leda"), VoiceOption("Zephyr","Voice 4 \u2022 Zephyr"),
         VoiceOption("Despina","Voice 5 \u2022 Despina"), VoiceOption("Autonoe","Voice 6 \u2022 Autonoe"),
         VoiceOption("Callirrhoe","Voice 7 \u2022 Callirrhoe"), VoiceOption("Erinome","Voice 8 \u2022 Erinome"),
-        VoiceOption("Gacrux","Voice 9 \u2022 Gacrux"), VoiceOption("Sulafat","Voice 10 \u2022 Sulafat")
+        VoiceOption("Laomedeia","Voice 9 \u2022 Laomedeia"), VoiceOption("Sulafat","Voice 10 \u2022 Sulafat")
     )
     fun find(id: String) = list.firstOrNull { it.id == id } ?: list[0]
     val msgList = listOf(
