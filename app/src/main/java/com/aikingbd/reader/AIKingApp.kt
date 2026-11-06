@@ -43,6 +43,7 @@ class AIKingApp : Application() {
                 if (activity is MainActivity) {
                     val g = gates.getOrPut(activity) { PinLock(activity, Prefs(activity)) }
                     g.showIfLocked()
+                    AdGate.preload(activity)
                 }
             }
             override fun onActivityPaused(activity: Activity) {}

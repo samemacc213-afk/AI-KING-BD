@@ -76,7 +76,7 @@ class MainActivity : AppCompatActivity() {
         setupSlider(R.id.seekPitch, R.id.tvPitch, prefs.pitch) { prefs.pitch = it }
         setupSlider(R.id.seekSpeed, R.id.tvSpeed, prefs.speed) { prefs.speed = it }
 
-        switchFloat.setOnCheckedChangeListener { _, checked ->
+        switchFloat.setOnCheckedChangeListener { _, checked -> AdGate.showThen(this) {
             if (checked) {
                 if (!Settings.canDrawOverlays(this)) {
                     switchFloat.isChecked = false
@@ -86,15 +86,17 @@ class MainActivity : AppCompatActivity() {
                     ContextCompat.startForegroundService(this, Intent(this, FloatingService::class.java))
                     prefs.enabled = true
                     renderStatus(true)
-                    AppOpenManager.showOnLaunch(this)
+                    
                 }
             } else {
                 stopService(Intent(this, FloatingService::class.java))
                 prefs.enabled = false
-                AppOpenManager.showOnLaunch(this)
+                
                 renderStatus(false)
             }
+        
         }
+    }
 
         findViewById<LinearLayout>(R.id.btnTest).setOnClickListener {
             if (prefs.apiKey.isBlank()) Toast.makeText(this, "Add your free Gemini key in card 7 for the female voices", Toast.LENGTH_LONG).show()
