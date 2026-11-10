@@ -180,6 +180,7 @@ class MainActivity : AppCompatActivity() {
         box.addView(av, lpv)
         content.addView(box, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         adView = av
+        AdExtras.attach(this, scroll)
     }
 
     override fun onStart() {
@@ -384,6 +385,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun revealVoice(result: VoiceResult) {
+        AdExtras.offerAfterVoice(this)
         val status = findViewById<TextView>(R.id.tvVoiceStatus)
         val row = findViewById<LinearLayout>(R.id.shareRow)
         val play = findViewById<TextView>(R.id.btnPlayVoice)
