@@ -42,6 +42,10 @@ class FloatingService : Service() {
     private var params: WindowManager.LayoutParams? = null
     private var selView: ImageView? = null
     private var selParams: WindowManager.LayoutParams? = null
+    private var recView: ImageView? = null
+    private var recParams: WindowManager.LayoutParams? = null
+    private var txtView: ImageView? = null
+    private var txtParams: WindowManager.LayoutParams? = null
     private var box: SelectionBox? = null
     private var btnSize = 0
     private var gap = 0
@@ -150,6 +154,31 @@ class FloatingService : Service() {
         attachDrag(sv) { toggleBox() }
         manager.addView(sv, sp)
 
+        val rp = overlayParams(lp.x, lp.y + (btnSize + gap) * 2)
+        recParams = rp
+        val rv = ImageView(this).apply {
+            setImageResource(R.drawable.ic_rec_button)
+            scaleType = ImageView.ScaleType.FIT_XY
+            contentDescription = "Start voice recording"
+        }
+        recView = rv
+        attachDrag(rv) { VoiceCapture.begin(this) }
+        manager.addView(rv, rp)
+
+        val tp = overlayParams(lp.x, lp.y + (btnSize + gap) * 3)
+        txtParams = tp
+        val tv = ImageView(this).apply {
+            setImageResource(R.drawable.ic_text_button)
+            scaleType = ImageView.ScaleType.FIT_XY
+            contentDescription = "Voice to Bengali text, copied"
+        }
+        txtView = tv
+        attachDrag(tv) { VoiceCapture.stopAndConvert(this) }
+        manager.addView(tv, tp)
+        VoiceCapture.onState = { on ->
+            rv.setImageResource(if (on) R.drawable.ic_rec_active_button else R.drawable.ic_rec_button)
+        }
+
         moveBoth(lp.x, lp.y)
     }
 
@@ -158,7 +187,7 @@ class FloatingService : Service() {
         val m = params ?: return
         val sw = resources.displayMetrics.widthPixels
         val sh = resources.displayMetrics.heightPixels
-        val total = btnSize * 2 + gap
+        val total = btnSize * 4 + gap * 3
         m.x = x.coerceIn(0, maxOf(0, sw - btnSize))
         m.y = y.coerceIn(0, maxOf(0, sh - total))
         button?.let { try { manager.updateViewLayout(it, m) } catch (_: Exception) {} }
@@ -167,6 +196,18 @@ class FloatingService : Service() {
             sp.x = m.x
             sp.y = m.y + btnSize + gap
             selView?.let { try { manager.updateViewLayout(it, sp) } catch (_: Exception) {} }
+        }
+        val rp = recParams
+        if (rp != null) {
+            rp.x = m.x
+            rp.y = m.y + (btnSize + gap) * 2
+            recView?.let { try { manager.updateViewLayout(it, rp) } catch (_: Exception) {} }
+        }
+        val tp = txtParams
+        if (tp != null) {
+            tp.x = m.x
+            tp.y = m.y + (btnSize + gap) * 3
+            txtView?.let { try { manager.updateViewLayout(it, tp) } catch (_: Exception) {} }
         }
     }
 
@@ -318,8 +359,13 @@ class FloatingService : Service() {
         box = null
         button?.let { try { wm?.removeView(it) } catch (_: Exception) {} }
         selView?.let { try { wm?.removeView(it) } catch (_: Exception) {} }
+        recView?.let { try { wm?.removeView(it) } catch (_: Exception) {} }
+        txtView?.let { try { wm?.removeView(it) } catch (_: Exception) {} }
         button = null
         selView = null
+        recView = null
+        txtView = null
+        VoiceCapture.onState = null
         super.onDestroy()
     }
 }
