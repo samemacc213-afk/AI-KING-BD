@@ -36,6 +36,7 @@ class AIKingApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
         registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
             override fun onActivityStarted(activity: Activity) {}
@@ -44,6 +45,7 @@ class AIKingApp : Application() {
                     val g = gates.getOrPut(activity) { PinLock(activity, Prefs(activity)) }
                     g.showIfLocked()
                     AdGate.preload(activity)
+                    CrashLog.showIfAny(activity)
                 }
             }
             override fun onActivityPaused(activity: Activity) {}
