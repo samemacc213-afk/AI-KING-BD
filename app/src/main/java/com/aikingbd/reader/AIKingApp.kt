@@ -44,6 +44,7 @@ class AIKingApp : Application() {
                 if (activity is MainActivity) {
                     val g = gates.getOrPut(activity) { PinLock(activity, Prefs(activity)) }
                     g.showIfLocked()
+                    ButtonSwitches.attach(activity)
                     AdGate.preload(activity)
                     CrashLog.showIfAny(activity)
                 }

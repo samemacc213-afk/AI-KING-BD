@@ -46,6 +46,10 @@ class FloatingService : Service() {
     private var recParams: WindowManager.LayoutParams? = null
     private var txtView: ImageView? = null
     private var txtParams: WindowManager.LayoutParams? = null
+    private var showRead = true
+    private var showSelect = true
+    private var showRec = false
+    private var showText = false
     private var box: SelectionBox? = null
     private var btnSize = 0
     private var gap = 0
@@ -55,10 +59,15 @@ class FloatingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startAsForeground()
-        if (button == null) {
-            showButton()
-        } else if (intent?.action == ACTION_REFRESH) {
-            applyImage()
+        try {
+            if (button == null) {
+                showButton()
+            } else if (intent?.action == ACTION_REFRESH) {
+                applyImage()
+                applyVisibility()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Floating buttons could not start", Toast.LENGTH_LONG).show()
         }
         return START_STICKY
     }
@@ -179,36 +188,56 @@ class FloatingService : Service() {
             rv.setImageResource(if (on) R.drawable.ic_rec_active_button else R.drawable.ic_rec_button)
         }
 
+        loadFlags()
         moveBoth(lp.x, lp.y)
     }
 
+    private fun loadFlags() {
+        showRead = FloatPrefs.get(this, "read")
+        showSelect = FloatPrefs.get(this, "select")
+        showRec = FloatPrefs.get(this, "rec")
+        showText = FloatPrefs.get(this, "text")
+    }
+
+    private fun applyVisibility() {
+        loadFlags()
+        val p = params ?: return
+        moveBoth(p.x, p.y)
+    }
+
+    // Only the buttons you switched on are shown. They are stacked together with no gaps.
     private fun moveBoth(x: Int, y: Int) {
         val manager = wm ?: return
         val m = params ?: return
         val sw = resources.displayMetrics.widthPixels
         val sh = resources.displayMetrics.heightPixels
-        val total = btnSize * 4 + gap * 3
+        var count = 0
+        if (showRead) count++
+        if (showSelect) count++
+        if (showRec) count++
+        if (showText) count++
+        if (count == 0) count = 1
+        val step = btnSize + gap
+        val total = btnSize + step * (count - 1)
         m.x = x.coerceIn(0, maxOf(0, sw - btnSize))
         m.y = y.coerceIn(0, maxOf(0, sh - total))
-        button?.let { try { manager.updateViewLayout(it, m) } catch (_: Exception) {} }
-        val sp = selParams
-        if (sp != null) {
-            sp.x = m.x
-            sp.y = m.y + btnSize + gap
-            selView?.let { try { manager.updateViewLayout(it, sp) } catch (_: Exception) {} }
+        var idx = 0
+        fun place(v: View?, p: WindowManager.LayoutParams?, on: Boolean) {
+            if (v == null || p == null) return
+            if (on) {
+                p.x = m.x
+                p.y = m.y + step * idx
+                idx++
+                if (v.visibility != View.VISIBLE) v.visibility = View.VISIBLE
+            } else if (v.visibility != View.GONE) {
+                v.visibility = View.GONE
+            }
+            try { manager.updateViewLayout(v, p) } catch (_: Exception) {}
         }
-        val rp = recParams
-        if (rp != null) {
-            rp.x = m.x
-            rp.y = m.y + (btnSize + gap) * 2
-            recView?.let { try { manager.updateViewLayout(it, rp) } catch (_: Exception) {} }
-        }
-        val tp = txtParams
-        if (tp != null) {
-            tp.x = m.x
-            tp.y = m.y + (btnSize + gap) * 3
-            txtView?.let { try { manager.updateViewLayout(it, tp) } catch (_: Exception) {} }
-        }
+        place(button, m, showRead)
+        place(selView, selParams, showSelect)
+        place(recView, recParams, showRec)
+        place(txtView, txtParams, showText)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -242,7 +271,11 @@ class FloatingService : Service() {
                     }
                     MotionEvent.ACTION_UP -> {
                         if (!moved) {
-                            onTapAction()
+                            try {
+                                onTapAction()
+                            } catch (e: Exception) {
+                                Toast.makeText(this@FloatingService, "Something went wrong, try again", Toast.LENGTH_SHORT).show()
+                            }
                         } else {
                             prefs.btnX = m.x
                             prefs.btnY = m.y
