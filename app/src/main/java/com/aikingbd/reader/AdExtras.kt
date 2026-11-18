@@ -81,12 +81,14 @@ object AdExtras {
                 } else {
                     nativeAd?.destroy()
                     nativeAd = ad
+                    AdLog.other("Native", "loaded")
                     slot.removeAllViews()
                     slot.addView(buildNativeView(activity, ad))
                 }
             }
             .withAdListener(object : AdListener() {
                 override fun onAdFailedToLoad(error: LoadAdError) {
+                    AdLog.other("Native", "failed " + error.code)
                     handler.postDelayed({
                         if (!activity.isDestroyed && !activity.isFinishing) loadNative(activity, slot)
                     }, 30_000L)
@@ -175,11 +177,13 @@ object AdExtras {
             override fun onAdLoaded(ad: RewardedAd) {
                 rewarded = ad
                 rewardedLoading = false
+                AdLog.other("Rew", "loaded")
             }
 
             override fun onAdFailedToLoad(error: LoadAdError) {
                 rewarded = null
                 rewardedLoading = false
+                AdLog.other("Rew", "failed " + error.code)
                 handler.postDelayed({ preloadRewarded(app) }, 30_000L)
             }
         })
@@ -217,11 +221,13 @@ object AdExtras {
                 override fun onAdLoaded(ad: RewardedInterstitialAd) {
                     rewardedInt = ad
                     rewardedIntLoading = false
+                    AdLog.other("RewInt", "loaded")
                 }
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     rewardedInt = null
                     rewardedIntLoading = false
+                    AdLog.other("RewInt", "failed " + error.code)
                     handler.postDelayed({ preloadRewardedInt(app) }, 30_000L)
                 }
             })

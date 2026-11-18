@@ -26,12 +26,14 @@ object AdGate {
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(loaded: InterstitialAd) {
                     ad = loaded
+                    AdLog.other("Inter", "loaded")
                     loading = false
                 }
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     ad = null
                     loading = false
+                    AdLog.other("Inter", "failed " + error.code)
                     handler.postDelayed({ preload(app) }, 20_000L)
                 }
             })
