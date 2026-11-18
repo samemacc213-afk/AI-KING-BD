@@ -1,6 +1,5 @@
 package com.aikingbd.reader
 
-import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -23,6 +22,7 @@ import java.util.concurrent.Executors
 // Voice typing from the floating buttons:
 //   mic button  -> starts recording
 //   text button -> stops, turns the voice into Bengali text (Sarvam) and copies it
+// Nothing heavy ever runs on the main thread, so the phone cannot freeze.
 object VoiceCapture {
     private const val RATE = 16000
     private const val CHUNK_BYTES = RATE * 2 * 28
@@ -33,7 +33,6 @@ object VoiceCapture {
     @Volatile
     var recording = false
     var onState: ((Boolean) -> Unit)? = null
-    private var host: Activity? = null
     private var rec: AudioRecord? = null
     private var worker: Thread? = null
     private val pcm = ByteArrayOutputStream()
@@ -74,11 +73,12 @@ object VoiceCapture {
     }
 
     // Called by VoiceCaptureActivity once it has the microphone permission
-    fun startRecording(activity: Activity): Boolean {
+    fun startRecording(ctx: Context): Boolean {
         if (recording) return true
+        val app = ctx.applicationContext
         val minBuf = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (minBuf <= 0) {
-            toast(activity, "Microphone is not available", true)
+            toast(app, "Microphone is not available", true)
             return false
         }
         val r = try {
@@ -91,27 +91,29 @@ object VoiceCapture {
         }
         if (r == null || r.state != AudioRecord.STATE_INITIALIZED) {
             r?.release()
-            toast(activity, "Microphone is busy. Try again", true)
+            toast(app, "Microphone is busy. Try again", true)
             return false
         }
         try {
             r.startRecording()
         } catch (e: Exception) {
             r.release()
-            toast(activity, "Could not start the microphone", true)
+            toast(app, "Could not start the microphone", true)
             return false
         }
         synchronized(pcm) { pcm.reset() }
         rec = r
-        host = activity
         recording = true
         notifyState(true)
-        val appCtx = activity.applicationContext
         val t = Thread {
             val buf = ByteArray(4096)
             var total = 0
             while (recording && total < MAX_BYTES) {
-                val n = r.read(buf, 0, buf.size)
+                val n = try {
+                    r.read(buf, 0, buf.size)
+                } catch (e: Exception) {
+                    -1
+                }
                 if (n > 0) {
                     synchronized(pcm) { pcm.write(buf, 0, n) }
                     total += n
@@ -120,7 +122,7 @@ object VoiceCapture {
                 }
             }
             if (recording && total >= MAX_BYTES) {
-                main.post { stopAndConvert(appCtx) }
+                main.post { stopAndConvert(app) }
             }
         }
         worker = t
@@ -136,47 +138,65 @@ object VoiceCapture {
             return
         }
         recording = false
-        try { worker?.join(1500) } catch (e: Exception) { }
-        try { rec?.stop() } catch (e: Exception) { }
-        try { rec?.release() } catch (e: Exception) { }
-        rec = null
         notifyState(false)
-        val a = host
-        host = null
-        a?.finish()
-        val data = synchronized(pcm) { pcm.toByteArray() }
-        if (data.size < RATE * 2 / 3) {
-            toast(app, "Too short. Tap the mic button and speak again")
-            return
-        }
         toast(app, "Converting your voice to text...")
         val key = Prefs(app).sarvamKey.trim()
         executor.execute {
+            try {
+                worker?.join(2000)
+            } catch (e: Exception) {
+            }
+            releaseRecorder()
+            main.post {
+                try {
+                    app.stopService(Intent(app, VoiceRecordService::class.java))
+                } catch (e: Exception) {
+                }
+            }
+            val data = synchronized(pcm) { pcm.toByteArray() }
+            if (data.size < RATE * 2 / 3) {
+                toast(app, "Too short. Tap the mic button and speak again")
+                return@execute
+            }
             val text = transcribe(data, key)
             main.post {
                 if (text.isBlank()) {
                     val why = if (lastError.isEmpty()) "" else ": " + lastError
                     toast(app, "Could not turn the voice into text" + why, true)
                 } else {
-                    val cm = app.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    cm.setPrimaryClip(ClipData.newPlainText("AI KING BD", text))
-                    toast(app, "Copied: " + text.take(60), true)
+                    try {
+                        val cm = app.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText("AI KING BD", text))
+                        toast(app, "Copied: " + text.take(60), true)
+                    } catch (e: Exception) {
+                        toast(app, "Could not copy the text", true)
+                    }
                 }
             }
         }
     }
 
-    // The recording screen was closed by the system or the user: drop the recording
-    fun hostGone(a: Activity) {
-        if (host !== a) return
-        host = null
+    // Something went wrong while recording: stop quietly
+    fun abort(ctx: Context, why: String) {
+        val app = ctx.applicationContext
         if (recording) {
             recording = false
-            try { rec?.stop() } catch (e: Exception) { }
-            try { rec?.release() } catch (e: Exception) { }
-            rec = null
+            releaseRecorder()
             notifyState(false)
         }
+        toast(app, why, true)
+    }
+
+    private fun releaseRecorder() {
+        try {
+            rec?.stop()
+        } catch (e: Exception) {
+        }
+        try {
+            rec?.release()
+        } catch (e: Exception) {
+        }
+        rec = null
     }
 
     // Sarvam accepts up to 30 seconds per request, so long speech is cut in 28 second pieces

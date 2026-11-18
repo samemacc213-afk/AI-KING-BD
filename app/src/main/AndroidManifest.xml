@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -94,5 +95,9 @@
             android:launchMode="singleTask"
             android:taskAffinity=""
             android:theme="@style/Theme.AIKing.Transparent" />
+        <service
+            android:name=".VoiceRecordService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
     </application>
 </manifest>
